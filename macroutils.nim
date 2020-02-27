@@ -22,61 +22,58 @@ converter Lit*[T](x: set[T]): NimNode = newLit(`x`)
 
 template len*(s: Slice): untyped = s.length
 
-template addArgs(x: NimNode, arguments: varargs[NimNode]): untyped =
+proc addArgs(x: var NimNode, arguments: varargs[NimNode]) =
   for a in arguments:
     x.add a
 
-template asIdent(name: string | NimNode): untyped =
+proc asIdent(name: string | NimNode): NimNode =
   when name is NimNode:
     assert name.kind == nnkIdent, "Node must be an identifier"
     name
   else:
     newIdentNode(name)
 
-template Ident*(name: string): untyped =
+proc Ident*(name: string): NimNode =
   newIdentNode(name)
 
-template Command*(name: string | NimNode, arguments: varargs[NimNode]): untyped =
-  var x = nnkCommand.newTree(name.asIdent)
-  x.addArgs arguments
-  x
+proc Command*(name: string | NimNode, arguments: varargs[NimNode]): NimNode =
+  result = nnkCommand.newTree(name.asIdent)
+  result.addArgs arguments
 
-template Call*(name: string | NimNode, arguments: varargs[NimNode]): untyped =
-  var x = nnkCall.newTree(name.asIdent)
-  x.addArgs arguments
-  x
+proc Call*(name: string | NimNode, arguments: varargs[NimNode]): NimNode =
+  result = nnkCall.newTree(name.asIdent)
+  result.addArgs arguments
 
-template Infix*(name: string | NimNode; left, right: untyped): untyped =
+proc Infix*(name: string | NimNode; left, right: NimNode): NimNode =
   nnkInfix.newTree(
     name.asIdent,
     left, right)
 
-template Prefix*(name: string | NimNode; arg: untyped): untyped =
+proc Prefix*(name: string | NimNode; arg: NimNode): NimNode =
   nnkPrefix.newTree(
     name.asIdent,
     arg)
 
-template Postfix*(name: string | NimNode; arg: untyped): untyped =
+proc Postfix*(name: string | NimNode; arg: NimNode): NimNode =
   nnkPostfix.newTree(
     name.asIdent,
     arg)
 
-template ExprEqExpr*(left, right: string | NimNode): untyped =
+proc ExprEqExpr*(left, right: string | NimNode): NimNode =
   nnkExprEqExpr.newTree(
     left,
     right)
 
-template ExprColonExpr*(left, right: string | NimNode): untyped =
+proc ExprColonExpr*(left, right: string | NimNode): NimNode =
   nnkExprColonExpr.newTree(
     left,
     right)
 
-template RStrLit*(arg: string): untyped =
-  var x = newNimNode(nnkRStrLit)
-  x.strVal = arg
-  x
+proc RStrLit*(arg: string): NimNode =
+  result = newNimNode(nnkRStrLit)
+  result.strVal = arg
 
-template CallStrLit*(name, arg: string | NimNode): untyped =
+proc CallStrLit*(name, arg: string | NimNode): NimNode =
   nnkCallStrLit.newTree(
     name.asIdent,
     when arg is NimNode:
@@ -89,132 +86,270 @@ template CallStrLit*(name, arg: string | NimNode): untyped =
       RStrLit(arg)
   )
 
-template DerefExpr*(node: NimNode): untyped =
+proc DerefExpr*(node: NimNode): NimNode =
   nnkDerefExpr.newTree(node)
 
-template Addr*(node: NimNode): untyped =
+proc Addr*(node: NimNode): NimNode =
   nnkAddr.newTree(node)
 
-template Cast*(bracket, node: NimNode): untyped =
+proc Cast*(bracket, node: NimNode): NimNode =
   nnkCast.newTree(bracket, node)
 
-template DotExpr*(left, right: NimNode): untyped =
+proc DotExpr*(left, right: NimNode): NimNode =
   nnkDotExpr.newTree(left, right)
 
-template BracketExpr*(node, bracket: NimNode): untyped =
+proc BracketExpr*(node, bracket: NimNode): NimNode =
   nnkBracketExpr.newTree(node, bracket)
 
-template Par*(args: varargs[NimNode]): untyped =
-  var x = nnkPar.newTree()
-  x.addArgs(args)
-  x
+proc Par*(args: varargs[NimNode]): NimNode =
+  result = nnkPar.newTree()
+  result.addArgs(args)
 
-template Curly*(args: varargs[NimNode]): untyped =
-  var x = nnkCurly.newTree()
-  x.addArgs(args)
-  x
+proc Curly*(args: varargs[NimNode]): NimNode =
+  result = nnkCurly.newTree()
+  result.addArgs(args)
 
-template Bracket*(args: varargs[NimNode]): untyped =
-  var x = nnkBracket.newTree()
-  x.addArgs(args)
-  x
+proc Bracket*(args: varargs[NimNode]): NimNode =
+  result = nnkBracket.newTree()
+  result.addArgs(args)
 
-template TableConstr*(args: varargs[NimNode]): untyped =
-  var x = nnkTableConstr.newTree()
+proc TableConstr*(args: varargs[NimNode]): NimNode =
+  result = nnkTableConstr.newTree()
   for a in args:
     assert a.kind == nnkExprColonExpr, "Unable to add non-colon expression to table constructor: " & $a
-    x.add a
-  x
+    result.add a
 
-template IfExpr*(args: varargs[NimNode]): untyped =
-  var x = nnkIfExpr.newTree()
-  for a in args:
+proc IfExpr*(branches: varargs[NimNode]): NimNode =
+  result = nnkIfExpr.newTree()
+  for a in branches:
     assert a.kind in {nnkElifBranch, nnkElifExpr, nnkElseExpr, nnkElse}, "Unable to add non-branch expression to if constructor: " & $a
-    x.add a
-  x
+    result.add a
 
-template ElifExpr*(cond, body: NimNode): untyped =
+proc IfStmt*(branches: varargs[NimNode]): NimNode =
+  result = nnkIfStmt.newTree()
+  for a in branches:
+    assert a.kind in {nnkElifBranch, nnkElifExpr, nnkElseExpr, nnkElse}, "Unable to add non-branch expression to if constructor: " & $a
+    result.add a
+
+proc WhenStmt*(branches: varargs[NimNode]): NimNode =
+  result = nnkWhenStmt.newTree()
+  for a in branches:
+    assert a.kind in {nnkElifBranch, nnkElifExpr, nnkElseExpr, nnkElse}, "Unable to add non-branch expression to if constructor: " & $a
+    result.add a
+
+proc ElifExpr*(cond, body: NimNode): NimNode =
   nnkElifExpr.newTree(cond, body)
 
-template ElifBranch*(cond, body: NimNode): untyped =
+proc ElifBranch*(cond, body: NimNode): NimNode =
   nnkElifBranch.newTree(cond, body)
 
-template ElseExpr*(body: NimNode): untyped =
+proc ElseExpr*(body: NimNode): NimNode =
   nnkElseExpr.newTree(body)
 
-template Else*(body: NimNode): untyped =
+proc Else*(body: NimNode): NimNode =
   nnkElse.newTree(body)
 
-template CommentStmt*(arg: string): untyped =
-  var x = nnkCommentStmt.newTree()
-  x.strVal = arg
-  x
+proc CommentStmt*(arg: string): NimNode =
+  result = nnkCommentStmt.newTree()
+  result.strVal = arg
 
-template Pragma*(args: varargs[untyped]): untyped =
-  var x = nnkPragma.newTree()
-  x.addArgs args
-  x
+proc Pragma*(args: varargs[NimNode]): NimNode =
+  result = nnkPragma.newTree()
+  result.addArgs args
 
-template Asgn*(left, right: NimNode): untyped =
+proc Asgn*(left, right: NimNode): NimNode =
   nnkAsgn.newTree(left, right)
 
-template StmtList*(args: varargs[untyped]): untyped =
-  var x = nnkStmtList.newTree()
-  x.addArgs args
-  x
+proc StmtList*(args: varargs[NimNode]): NimNode =
+  result = nnkStmtList.newTree()
+  result.addArgs args
 
-template CaseStmt*(cond: NimNode, args: varargs[NimNode]): untyped =
-  var x = nnkCaseStmt.newTree(cond)
-  for a in args:
+proc CaseStmt*(cond: NimNode, branches: varargs[NimNode]): NimNode =
+  result = nnkCaseStmt.newTree(cond)
+  for a in branches:
     assert a.kind in {nnkOfBranch, nnkElifBranch, nnkElseExpr, nnkElse}, "Unable to add non-branch expression to case constructor: " & $a
-    x.add a
-  x
+    result.add a
 
-template OfBranch*(args: openarray[Nimnode], body: NimNode): untyped =
-  var x = nnkOfBranch.newTree()
-  x.addArgs args
-  x.add body
-  x
+proc OfBranch*(args: openarray[Nimnode], body: NimNode): NimNode =
+  result = nnkOfBranch.newTree()
+  result.addArgs args
+  result.add body
+
+proc WhileStmt*(cond, body: NimNode): NimNode =
+  nnkWhileStmt.newTree(cond, body)
+
+proc ForStmt*(args: openarray[NimNode], iter, body: NimNode): NimNode =
+  result = nnkForStmt.newTree()
+  result.addArgs args
+  result.add iter
+  result.add body
+
+proc TryStmt*(body: NimNode, branches: varargs[NimNode]): NimNode =
+  result = nnkTryStmt.newTree(body)
+  for branch in branches:
+    assert branch.kind in {nnkExceptBranch, nnkFinally}, "Unable to add non-except or -finally expression to try constructor: " & $branch
+    result.add branch
+
+proc ExceptBranch*(args: openarray[NimNode], body: NimNode): NimNode =
+  result = nnkExceptBranch.newTree()
+  result.addArgs args
+  result.add body
+
+proc Finally*(body: NimNode): NimNode =
+  nnkFinally.newTree(body)
+
+proc ReturnStmt*(arg: NimNode): NimNode =
+  nnkReturnStmt.newTree(arg)
+
+proc YieldStmt*(arg: NimNode): NimNode =
+  nnkYieldStmt.newTree(arg)
+
+proc DiscardStmt*(arg: NimNode): NimNode =
+  nnkDiscardStmt.newTree(arg)
+
+proc BreakStmt*(arg: NimNode): NimNode =
+  nnkBreakStmt.newTree(arg)
+
+proc BlockStmt*(name: string | NimNode, body: NimNode): NimNode =
+  nnkBlockStmt.newTree(name.asIdent, body)
+
+proc BlockStmt*(body: NimNode): NimNode =
+  nnkBlockStmt.newTree(newNimNode(nnkEmpty), body)
+
+proc ContinueStmt*(): NimNode =
+  newNimNode(nnkContinueStmt)
+
+proc AsmStmt*(pragmas, body: string | NimNode): NimNode =
+  when body is string:
+    nnkAsmStmt.newTree(pragmas, newLit(body))
+  else:
+    nnkAsmStmt.newTree(pragmas, body)
+
+proc AsmStmt*(body: string | NimNode): NimNode =
+  AsmStmt(newNimNode(nnkEmpty), body)
+
+proc ImportStmt*(args: varargs[NimNode]): NimNode =
+  result = nnkImportStmt.newTree()
+  result.addArgs args
+
+proc ImportExceptStmt*(left, right: NimNode): NimNode =
+  nnkImportExceptStmt.newTree(left, right)
+
+proc FromStmt*(left, right: NimNode): NimNode =
+  nnkFromStmt.newTree(left, right)
+
+proc ExportStmt*(arg: NimNode): NimNode =
+  nnkExportStmt.newTree(arg)
+
+proc ExportExceptStmt*(left, right: NimNode): NimNode =
+  nnkExportExceptStmt.newTree(left, right)
+
+proc IncludeStmt*(args: varargs[NimNode]): NimNode =
+  result = nnkIncludeStmt.newTree()
+  result.addArgs args
+
+proc VarSection*(defs: varargs[NimNode]): NimNode =
+  result = nnkVarSection.newTree()
+  for def in defs:
+    assert def.kind == nnkIdentDefs, "Unable to add something not an ident definition to var section constructor: " & $def
+    result.add def
+
+proc LetSection*(defs: varargs[NimNode]): NimNode =
+  result = nnkLetSection.newTree()
+  for def in defs:
+    assert def.kind == nnkIdentDefs, "Unable to add something not an ident definition to let section constructor: " & $def
+    result.add def
+
+proc ConstSection*(defs: varargs[NimNode]): NimNode =
+  result = nnkConstSection.newTree()
+  for def in defs:
+    assert def.kind == nnkConstDef, "Unable to add something not a constant definition to const section constructor: " & $def
+    result.add def
+
+proc IdentDefs*(name, kind, body: NimNode): NimNode =
+  nnkIdentDefs.newTree(name, kind, body)
 
 template cond*(x: NimNode): untyped =
   case x.kind:
-  of nnkElifExpr, nnkCaseStmt, nnkElifBranch:
+  of nnkElifExpr, nnkCaseStmt, nnkElifBranch, nnkWhileStmt:
     x[0]
   else:
     raise newException(ValueError, "Unable to get condition for NimNode of kind " & $x.kind)
 
 template `cond=`*(x, val: NimNode): untyped =
   case x.kind:
-  of nnkElifExpr, nnkCaseStmt, nnkElifBranch:
+  of nnkElifExpr, nnkCaseStmt, nnkElifBranch, nnkWhileStmt:
     x[0] = val
   else:
     raise newException(ValueError, "Unable to set condition for NimNode of kind " & $x.kind)
 
+template iter*(x: NimNode): untyped =
+  case x.kind:
+  of nnkForStmt:
+    x[x.len - 2]
+  else:
+    raise newException(ValueError, "Unable to get iterator for NimNode of kind " & $x.kind)
+
+template `iter=`*(x, val: NimNode): untyped =
+  case x.kind:
+  of nnkForStmt:
+    x[x.len - 2] = val
+  else:
+    raise newException(ValueError, "Unable to set iterator for NimNode of kind " & $x.kind)
+
+template pragmas*(x: NimNode): untyped =
+  case x.kind:
+  of nnkAsmStmt:
+    x[0]
+  else:
+    raise newException(ValueError, "Unable to get pragmas for NimNode of kind " & $x.kind)
+
+template `pragmas=`*(x, val: NimNode): untyped =
+  case x.kind:
+  of nnkAsmStmt:
+    x[0] = val
+  else:
+    raise newException(ValueError, "Unable to set pragmas for NimNode of kind " & $x.kind)
+
 template body*(x: NimNode): untyped =
   case x.kind:
-  of nnkElseExpr, nnkElse:
+  of nnkElseExpr, nnkElse, nnkTryStmt, nnkFinally:
     x[0]
-  of nnkElifExpr, nnkElifBranch:
+  of nnkElifExpr, nnkElifBranch, nnkWhileStmt, nnkBlockStmt:
     x[1]
-  of nnkOfBranch:
+  of nnkOfBranch, nnkForStmt, nnkExceptBranch, nnkAsmStmt, nnkIdentDefs, nnkConstDef:
     x[x.len - 1]
   else:
     raise newException(ValueError, "Unable to get body for NimNode of kind " & $x.kind)
 
 template `body=`*(x, val: NimNode): untyped =
   case x.kind:
-  of nnkElseExpr, nnkElse:
+  of nnkElseExpr, nnkElse, nnkTryStmt, nnkFinally:
     x[0] = val
-  of nnkElifExpr, nnkElifBranch:
+  of nnkElifExpr, nnkElifBranch, nnkWhileStmt, nnkBlockStmt:
     x[1] = val
-  of nnkOfBranch:
+  of nnkOfBranch, nnkForStmt, nnkExceptBranch, nnkAsmStmt, nnkIdentDefs, nnkConstDef:
     x[x.len - 1] = val
   else:
     raise newException(ValueError, "Unable to set body for NimNode of kind " & $x.kind)
 
+template kind*(x: NimNode): untyped =
+  case x.kind:
+  of nnkIdentDefs, nnkConstDef:
+    x[1]
+  else:
+    raise newException(ValueError, "Unable to get kind for NimNode of kind " & $x.kind)
+
+template `kind=`*(x, val: NimNode): untyped =
+  case x.kind:
+  of nnkIdentDefs, nnkConstDef:
+    x[0] = val
+  else:
+    raise newException(ValueError, "Unable to set kind for NimNode of kind " & $x.kind)
+
 template name*(x: NimNode): untyped =
   case x.kind:
-  of nnkCommand, nnkCall, nnkInfix, nnkPrefix, nnkPostfix, nnkCallStrLit:
+  of nnkCommand, nnkCall, nnkInfix, nnkPrefix, nnkPostfix, nnkCallStrLit, nnkBlockStmt, nnkIdentDefs:
     x[0]
   of nnkIdent:
     x.strVal
@@ -223,7 +358,7 @@ template name*(x: NimNode): untyped =
 
 template `name=`*(x, val: NimNode): untyped =
   case x.kind:
-  of nnkCommand, nnkCall, nnkInfix, nnkPrefix, nnkPostfix, nnkCallStrLit:
+  of nnkCommand, nnkCall, nnkInfix, nnkPrefix, nnkPostfix, nnkCallStrLit, nnkBlockStmt, nnkIdentDefs:
     x[0] = val
   else:
     raise newException(ValueError, "Unable to set name for NimNode of kind " & $x.kind)
@@ -264,14 +399,69 @@ template `bracket=`*(x, val: NimNode): untyped =
   else:
     raise newException(ValueError, "Unable to set bracket for NimNode of kind " & $x.kind)
 
+template branches*(x: NimNode): untyped =
+  case x.kind:
+  of nnkCaseStmt, nnkTryStmt:
+    Slice(offset: 1, length: x.len - 1, node: x)
+  of nnkIfStmt, nnkIfExpr, nnkWhenStmt:
+    Slice(offset: 0, length: x.len, node: x)
+  else:
+    raise newException(ValueError, "Unable to get branches for NimNode of kind " & $x.kind)
+
+template `branches=`*(x: NimNode, val: openarray[NimNode]): untyped =
+  case x.kind:
+  of nnkTryStmt:
+    x.del(1, x.len - 1)
+    for child in val:
+      assert child.kind in {nnkExceptBranch, nnkFinally}, "Unable to add non-except or -finally expression to try constructor: " & $child
+      x.add child
+  of nnkIfExpr, nnkIfStmt, nnkWhenStmt:
+    x.del(0, x.len)
+    for child in val:
+      assert child.kind in {nnkElifExpr, nnkElifBranch, nnkElseExpr, nnkElse},
+        "Unable to add non-branch expression to " & (if x.kind == nnkWhenStmt: "when" else: "if") & " constructor: " & $child
+      x.add child
+  of nnkCaseStmt:
+    x.del(1, x.len - 1)
+    for child in val:
+      assert child.kind in {nnkOfBranch, nnkElifExpr, nnkElifBranch, nnkElseExpr, nnkElse}, "Unable to add non-branch expression to case constructor: " & $child
+      x.add child
+  else:
+    raise newException(ValueError, "Unable to set branches for NimNode of kind " & $x.kind)
+
+template defs*(x: NimNode): untyped =
+  case x.kind:
+  of nnkLetSection, nnkVarSection, nnkConstSection:
+    Slice(offset: 0, length: x.len, node: x)
+  else:
+    raise newException(ValueError, "Unable to get definitions for NimNode of kind " & $x.kind)
+
+template `defs=`*(x: NimNode, val: openarray[NimNode]): untyped =
+  case x.kind:
+  of nnkVarSection, nnkLetSection:
+    x.del(0, x.len)
+    for child in val:
+      assert def.kind == nnkIdentDefs,
+        "Unable to add something not an ident definition to " & (if x.kind == nnkVarSection: "var" else: "let") & " section constructor: " & $def
+      x.add child
+  of nnkConstSection:
+    x.del(0, x.len)
+    for child in val:
+      assert def.kind == nnkConstDef,
+        "Unable to add something not a constant definition to const section constructor: " & $def
+      x.add child
+  else:
+    raise newException(ValueError, "Unable to set branches for NimNode of kind " & $x.kind)
 template args*(x: NimNode): untyped =
   case x.kind:
-  of nnkCommand, nnkCall, nnkCaseStmt:
+  of nnkCommand, nnkCall:
     Slice(offset: 1, length: x.len - 1, node: x)
-  of nnkPar, nnkCurly, nnkBracket, nnkTableConstr, nnkIfExpr, nnkPragma, nnkStmtList:
+  of nnkPar, nnkCurly, nnkBracket, nnkTableConstr, nnkPragma, nnkStmtList, nnkImportStmt, nnkIncludeStmt:
     Slice(offset: 0, length: x.len, node: x)
-  of nnkOfBranch:
+  of nnkOfBranch, nnkExceptBranch:
     Slice(offset: 0, length: x.len - 1, node: x)
+  of nnkForStmt:
+    Slice(offset: 0, length: x.len - 2, node: x)
   else:
     raise newException(ValueError, "Unable to get arguments for NimNode of kind " & $x.kind)
 
@@ -280,7 +470,7 @@ template `args=`*(x: NimNode, val: openarray[NimNode]): untyped =
   of nnkCommand, nnkCall:
     x.del(1, x.len - 1)
     x.add(children = val)
-  of nnkPar, nnkCurly, nnkBracket, nnkPragma, nnkStmtList:
+  of nnkPar, nnkCurly, nnkBracket, nnkPragma, nnkStmtList, nnkImportStmt, nnkIncludeStmt:
     x.del(0, x.len)
     x.add(children = val)
   of nnkTableConstr:
@@ -288,18 +478,12 @@ template `args=`*(x: NimNode, val: openarray[NimNode]): untyped =
     for child in val:
       assert child.kind == nnkExprColonExpr, "Unable to add non-colon expression to table constructor: " & $child
       x.add child
-  of nnkIfExpr:
-    x.del(0, x.len)
-    for child in val:
-      assert child.kind in {nnkElifExpr, nnkElifBranch, nnkElseExpr, nnkElse}, "Unable to add non-branch expression to if constructor: " & $child
-      x.add child
-  of nnkCaseStmt:
-    x.del(1, x.len - 1)
-    for child in val:
-      assert child.kind in {nnkOfBranch, nnkElifExpr, nnkElifBranch, nnkElseExpr, nnkElse}, "Unable to add non-branch expression to case constructor: " & $child
-      x.add child
-  of nnkOfBranch:
+  of nnkOfBranch, nnkExceptBranch:
     x.del(0, x.len - 1)
+    for child in val:
+      x.insert(0, child)
+  of nnkForStmt:
+    x.del(0, x.len - 2)
     for child in val:
       x.insert(0, child)
   else:
@@ -307,6 +491,8 @@ template `args=`*(x: NimNode, val: openarray[NimNode]): untyped =
 
 template arg*(x: NimNode): untyped =
   case x.kind:
+  of nnkReturnStmt, nnkYieldStmt, nnkDiscardStmt, nnkBreakStmt, nnkExportStmt:
+    x[0]
   of nnkPrefix, nnkPostfix, nnkCallStrLit:
     x[1]
   else:
@@ -314,6 +500,8 @@ template arg*(x: NimNode): untyped =
 
 template `arg=`*(x, val: NimNode): untyped =
   case x.kind:
+  of nnkReturnStmt, nnkYieldStmt, nnkDiscardStmt, nnkBreakStmt, nnkExportStmt:
+    x[0] = val
   of nnkPrefix, nnkPostfix, nnkCallStrLit:
     x[1] = val
   else:
@@ -321,7 +509,7 @@ template `arg=`*(x, val: NimNode): untyped =
 
 template left*(x: NimNode): untyped =
   case x.kind:
-  of nnkDotExpr, nnkExprEqExpr, nnkExprColonExpr, nnkAsgn:
+  of nnkDotExpr, nnkExprEqExpr, nnkExprColonExpr, nnkAsgn, nnkImportExceptStmt, nnkFromStmt, nnkExportExceptStmt:
     x[0]
   of nnkInfix:
     x[1]
@@ -330,7 +518,7 @@ template left*(x: NimNode): untyped =
 
 template `left=`*(x, val: NimNode): untyped =
   case x.kind:
-  of nnkDotExpr, nnkExprEqExpr, nnkExprColonExpr, nnkAsgn:
+  of nnkDotExpr, nnkExprEqExpr, nnkExprColonExpr, nnkAsgn, nnkImportExceptStmt, nnkFromStmt, nnkExportExceptStmt:
     x[0] = val
   of nnkInfix:
     x[1] = val
@@ -339,7 +527,7 @@ template `left=`*(x, val: NimNode): untyped =
 
 template right*(x: NimNode): untyped =
   case x.kind:
-  of nnkDotExpr, nnkExprEqExpr, nnkExprColonExpr, nnkAsgn:
+  of nnkDotExpr, nnkExprEqExpr, nnkExprColonExpr, nnkAsgn, nnkImportExceptStmt, nnkFromStmt, nnkExportExceptStmt:
     x[1]
   of nnkInfix:
     x[2]
@@ -348,7 +536,7 @@ template right*(x: NimNode): untyped =
 
 template `right=`*(x, val: NimNode): untyped =
   case x.kind:
-  of nnkDotExpr, nnkExprEqExpr, nnkExprColonExpr, nnkAsgn:
+  of nnkDotExpr, nnkExprEqExpr, nnkExprColonExpr, nnkAsgn, nnkImportExceptStmt, nnkFromStmt, nnkExportExceptStmt:
     x[1] = val
   of nnkInfix:
     x[2] = val
@@ -405,8 +593,8 @@ when isMainModule:
       OfBranch([Lit(100), Lit(200)], Lit"Hello"),
       ElifBranch(Ident"whatever", Lit"World")
     )
-    echo result.cond.repr
-    echo result.args[2].body
+    echo result.cond.repr # Echos out "something"
+    echo result.branches[2].body # This is the body of the elif branch, "World"
     echo result.repr
     #echo result.name
     #echo result.args.len
