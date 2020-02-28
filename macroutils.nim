@@ -266,8 +266,11 @@ proc ConstSection*(defs: varargs[NimNode]): NimNode =
     assert def.kind == nnkConstDef, "Unable to add something not a constant definition to const section constructor: " & $def
     result.add def
 
-proc IdentDefs*(name, kind, body: NimNode): NimNode =
-  nnkIdentDefs.newTree(name, kind, body)
+proc IdentDefs*(name, typ, body: NimNode): NimNode =
+  nnkIdentDefs.newTree(name, typ, body)
+
+proc ConstDef*(name, typ, body: NimNode): NimNode =
+  nnkConstDef.newTree(name, typ, body)
 
 template cond*(x: NimNode): untyped =
   case x.kind:
@@ -333,14 +336,14 @@ template `body=`*(x, val: NimNode): untyped =
   else:
     raise newException(ValueError, "Unable to set body for NimNode of kind " & $x.kind)
 
-template kind*(x: NimNode): untyped =
+template typ*(x: NimNode): untyped =
   case x.kind:
   of nnkIdentDefs, nnkConstDef:
     x[1]
   else:
     raise newException(ValueError, "Unable to get kind for NimNode of kind " & $x.kind)
 
-template `kind=`*(x, val: NimNode): untyped =
+template `typ=`*(x, val: NimNode): untyped =
   case x.kind:
   of nnkIdentDefs, nnkConstDef:
     x[0] = val
