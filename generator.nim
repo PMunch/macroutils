@@ -37,6 +37,8 @@ iterator items*(s: Slice): NimNode =
   for i in 0..<s.length:
     yield s.node[s.offset + i]
 
+template len*(s: Slice): untyped = s.length
+
 proc `$`*(s: Slice): string =
   result = "["
   for i in 0..<s.length:
@@ -50,7 +52,8 @@ macro generate(nodes: untyped): untyped =
   echo nodes.treeRepr
   echo nodes.repr
   assert(nodes.kind == nnkStmtList)
-  var fields: Table[string, seq[tuple[kind, indices: NimNode]]]
+  var fields: Table[string, seq[tuple[kind, node: NimNode]]]
+  let isInitialiser = newIdentNode("isInitialiser")
   for node in nodes:
     assert(node.kind == nnkCall)
     assert(node[0].kind == nnkIdent)
@@ -80,13 +83,9 @@ macro generate(nodes: untyped): untyped =
       of nnkPrefix:
         negatives.add arg[0][1][1].intVal
       else:
-        echo arg[0][1].kind
         assert(arg[0][1].kind in {nnkIntLit, nnkInfix})
     #positives.sort
     #negatives.sort
-    echo positives
-    echo negatives
-    echo flexible.start, ", ", flexible.stop
     for i, v in positives:
       assert(i == v)
     if flexible.start != -1:
@@ -110,7 +109,6 @@ macro generate(nodes: untyped): untyped =
         else:
           nnkInfix.newTree(newIdentNode("+"),
             newLit(positives.len + negatives.len), nnkDotExpr.newTree(flexible.node[0][0], newIdentNode("len")))
-      isInitialiser = newIdentNode("isInitialiser")
     generator[6].add quote do:
       const `isInitialiser` = true
       result = newNimNode(`nodeKind`)
@@ -118,8 +116,8 @@ macro generate(nodes: untyped): untyped =
       for i in 0..<`argcount`:
         result.add newEmptyNode()
     for arg in node[1]:
-      if fields.hasKeyOrPut(arg[0][0].strVal, @[(kind: node[0], indices: arg[0][1])]):
-        fields[arg[0][0].strVal].add (kind: node[0], indices: arg[0][1])
+      if fields.hasKeyOrPut(arg[0][0].strVal, @[(kind: node[0], node: arg)]):
+        fields[arg[0][0].strVal].add (kind: node[0], node: arg)
       if arg.len == 3:
         generator[6].add arg[2]
       else:
@@ -140,7 +138,7 @@ macro generate(nodes: untyped): untyped =
               start = arg[0][1][1]
             generator[6].add quote do:
               for i in `theRange`:
-                result[i] = newLit(`argName`[i-`start`])
+                result[i] = `argName`[i-`start`]
           of "..^":
             let
               argName = arg[0][0]
@@ -149,25 +147,40 @@ macro generate(nodes: untyped): untyped =
               for i in 0..`argName`.high:
                 result[`start` + i] = `argName`[i]
         else: discard
+    echo generator.treeRepr
     result.add generator
   for field, nodes in fields:
-    echo field
     let
       nameNode = newIdentNode(field)
+      setterNameNode = newIdentNode(field & "=")
       x = newIdentNode("x")
+      val = newIdentNode(field)
     var getter = quote do:
       template `nameNode`*(`x`: NimNode): untyped =
         case `x`.kind:
         else:
           raise newException(ValueError, "Unable to get " & `field` & " for NimNode of kind " & $`x`.kind)
+    var setter = quote do:
+      template `setterNameNode`*(`x`: NimNode, `val`: untyped): untyped =
+        const `isInitialiser` = false
+        template result(): untyped = `x`
+        case `x`.kind:
+        else:
+          raise newException(ValueError, "Unable to set " & `field` & " for NimNode of kind " & $`x`.kind)
     for node in nodes:
       let
-        branch = nnkOfBranch.newTree(newIdentNode("nnk" & node.kind.strVal))
-        indices = node.indices
+        getterBranch = nnkOfBranch.newTree(newIdentNode("nnk" & node.kind.strVal))
+        setterBranch = nnkOfBranch.newTree(newIdentNode("nnk" & node.kind.strVal))
+        indices = node.node[0][1]
       case indices.kind:
       of nnkIntLit, nnkPrefix:
-        branch.add quote do:
+        getterBranch.add quote do:
           `x`[`indices`]
+        if node.node.len == 3:
+          setterBranch.add node.node[2]
+        else:
+          setterBranch.add quote do:
+            `x`[`indices`] = `val`
       of nnkInfix:
         case $indices[0]:
         of "..", "..<", "..^":
@@ -175,21 +188,45 @@ macro generate(nodes: untyped): untyped =
             start = indices[1].intVal
             stop = indices[2].intVal
             length = stop - start + (if $indices[0] == "..<": 0 else: 1)
-          echo start, " ", stop
           if $indices[0] == "..^":
-            branch.add quote do:
+            getterBranch.add quote do:
               Slice(offset: `start`, length: `x`.len - `start` - `stop` + 1, node: `x`)
+            setterBranch.add quote do:
+              `x`.del(`start`, `x`.len - `stop` - `start` + 1)
+              for i, v in `val`:
+                `x`.insert(i + `start`, v)
           else:
-            branch.add quote do:
+            getterBranch.add quote do:
               Slice(offset: `start`, length: `length`, node: `x`)
+            setterBranch.add quote do:
+              assert `val`.len == `length`, "Unable to set fixed size field to different length: " & `field` & " in node of kind " & $`x`.kind
+              for i, v in `val`:
+                `x`[i + `start`] = v
       else: discard
-      getter[6][0].insert 1, branch
+      getter[6][0].insert 1, getterBranch
+      setter[6][2].insert 1, setterBranch
     result.add getter
+    result.add setter
   echo result.repr
+
+
+macro createLitConverters(list: varargs[untyped]): untyped =
+  result = newStmtList()
+  let x = newIdentNode("x")
+  for kind in list:
+    result.add quote do:
+      converter Lit*(`x`: `kind`): NimNode = newLit(`x`)
+
+createLitConverters(char, int, int8, int16, int32, int64, uint, uint8, uint16,
+                    uint32, uint64, bool, string, float32, float64, enum, object, tuple)
+
+converter Lit*[N, T](x: array[N, T]): NimNode = newLit(`x`)
+converter Lit*[T](x: seq[T]): NimNode = newLit(`x`)
+converter Lit*[T](x: set[T]): NimNode = newLit(`x`)
 
 proc asIdent(name: string | NimNode): NimNode =
   when name is NimNode:
-    assert name.kind == nnkIdent, "Node must be an identifier"
+    assert name.kind == nnkIdent, "Node must be an identifier, but was: " & $name.kind & "(" & name.repr & ")"
     name
   else:
     newIdentNode(name)
@@ -222,13 +259,20 @@ generate:
     arguments[4..^3](varargs[NimNode])
 
 macro test(): untyped =
-  let testCommand = Command(name = "hello", body = newLit("body"), head = newLit("head"), stuff = [100, 200, 300], newLit(400), newLit(500))
+  result = newStmtList()
+  let testCommand = Command(name = "hello", body = "body", head = "head", stuff = [100, 200, 300], 400, 500)
   echo testCommand.treeRepr
   echo "name: ", testCommand.name.repr
   echo "body: ", testCommand.body.repr
   echo "head: ", testCommand.head.repr
   echo "stuff: ", testCommand.stuff
   echo "arguments: ", testCommand.arguments
+  testCommand.name = "goodbye"
+  testCommand.body = "set body"
+  testCommand.stuff = [101, 202, 303]
+  testCommand.arguments = [800, 900]
+  echo testCommand.treeRepr
+
 
 test()
 
@@ -239,13 +283,3 @@ when false:
     when not isInitialiser:
       field.del(1, field.len - 1)
     result.add(children = arguments)
-
-macro test(x: untyped): untyped =
-  echo x.treeRepr
-
-test(0..^1)
-
-var x = [1, 2 ,3]
-
-echo x[1 ..^ 1]
-echo x[1 .. ^1]
