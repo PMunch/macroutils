@@ -84,7 +84,8 @@ macro generate(nodes: untyped, extraFields: untyped): untyped =
       nnkPostfix.newTree(newIdentNode("*"), node[0]), newEmptyNode(), newEmptyNode(),
       nnkFormalParams.newTree(newIdentNode("NimNode")), newEmptyNode(), newEmptyNode(), newStmtList())
     for arg in node[1]:
-      generator[3].add nnkIdentDefs.newTree(arg[0][0], arg[1], newEmptyNode())
+      if arg[0][0].strVal != "_":
+        generator[3].add nnkIdentDefs.newTree(arg[0][0], arg[1], newEmptyNode())
     let
       nodeKind = newIdentNode("nnk" & $node[0])
       argcount =
@@ -100,6 +101,9 @@ macro generate(nodes: untyped, extraFields: untyped): untyped =
       for i in 0..<`argcount`:
         result.add newEmptyNode()
     for arg in node[1]:
+      if arg[0][0].strVal == "_":
+        echo "skipping"
+        continue
       if fields.hasKeyOrPut(arg[0][0].strVal, @[(kind: node[0], node: arg)]):
         fields[arg[0][0].strVal].add (kind: node[0], node: arg)
       if arg.len == 3:
@@ -192,8 +196,8 @@ macro generate(nodes: untyped, extraFields: untyped): untyped =
                 for i, v in `val`:
                   `x`[i + `start`] = v
       else: discard
-      getter[6][0].insert 1, getterBranch
-      setter[6][2].insert 1, setterBranch
+      getter[6][0].insert getter[6][0].len - 1, getterBranch
+      setter[6][2].insert setter[6][2].len - 1, setterBranch
     for extra in extraFields:
       massert(extra.kind == nnkCall, extra)
       massert(extra.len == 2, extra)
@@ -202,8 +206,6 @@ macro generate(nodes: untyped, extraFields: untyped): untyped =
       if extra[1].strVal == field:
         getter[6][0].insert getter[6][0].len - 1, nnkOfBranch.newTree(newIdentNode("nnk" & extra[0].strVal), nnkDotExpr.newTree(x, newIdentNode("strVal")))
         setter[6][2].insert setter[6][2].len - 1, nnkOfBranch.newTree(newIdentNode("nnk" & extra[0].strVal), nnkAsgn.newTree(nnkDotExpr.newTree(x, newIdentNode("strVal")), nameNode))
-      echo getter.repr
-      echo setter.repr
     result.add getter
     result.add setter
   echo result.repr
@@ -233,6 +235,10 @@ proc asIdent(name: string | NimNode): NimNode =
 proc Ident*(name: string): NimNode =
   newIdentNode(name)
 
+proc Sym*(name: string): NimNode =
+  result = newNimNode(nnkSym)
+  result.strVal = name
+
 proc RStrLit*(argument: string): NimNode =
   result = newNimNode(nnkRStrLit)
   result.strVal = argument
@@ -247,8 +253,14 @@ proc BlockStmt*(body: NimNode): NimNode =
 proc ContinueStmt*(): NimNode =
   newNimNode(nnkContinueStmt)
 
+proc Empty*(): NimNode =
+  newEmptyNode()
+
 proc AsmStmt*(body: string | NimNode): NimNode =
-  AsmStmt(newNimNode(nnkEmpty), body)
+  nnkAsmStmt.newTree(newEmptyNode(), body)
+
+proc RaiseStmt*(): NimNode =
+  nnkRaiseStmt.newTree(newEmptyNode())
 
 generate:
   Command:
@@ -477,10 +489,206 @@ generate:
     name[0](NimNode)
     typ[1](NimNode)
     body[2](NimNode)
+
+  Range:
+    left[0](NimNode)
+    right[1](NimNode)
+
+  AccQuoted:
+    arguments[0..^1](varargs[NimNode])
+
+  BindStmt:
+    argument[0](NimNode)
+
+  GenericParams:
+    definitions[0..^1](varargs[NimNode]):
+      for i, def in definitions:
+        assert def.kind == nnkIdentDefs, "Unable to add something not an ident def to generic parameters constructor: " & $def.kind
+        result[i] = def
+
+  FormalParams:
+    retval[0](NimNode)
+    arguments[1..^1](varargs[NimNode])
+
+  OfInherit:
+    argument[0](NimNode)
+
+  VarTy:
+    argument[0](NimNode)
+
+  ProcDef:
+    name[0](NimNode)
+    _[1](NimNode)
+    generics[2](NimNode)
+    params[3](NimNode)
+    pragmas[4](NimNode)
+    _[5](NimNode)
+    body[6](NimNode)
+
+  FuncDef:
+    name[0](NimNode)
+    _[1](NimNode)
+    generics[2](NimNode)
+    params[3](NimNode)
+    pragmas[4](NimNode)
+    _[5](NimNode)
+    body[6](NimNode)
+
+  IteratorDef:
+    name[0](NimNode)
+    _[1](NimNode)
+    generics[2](NimNode)
+    params[3](NimNode)
+    pragmas[4](NimNode)
+    _[5](NimNode)
+    body[6](NimNode)
+
+  ConverterDef:
+    name[0](NimNode)
+    _[1](NimNode)
+    generics[2](NimNode)
+    params[3](NimNode)
+    pragmas[4](NimNode)
+    _[5](NimNode)
+    body[6](NimNode)
+
+  MethodDef:
+    name[0](NimNode)
+    _[1](NimNode)
+    generics[2](NimNode)
+    params[3](NimNode)
+    pragmas[4](NimNode)
+    _[5](NimNode)
+    body[6](NimNode)
+
+  TemplateDef:
+    name[0](NimNode)
+    terms[1](NimNode)
+    generics[2](NimNode)
+    params[3](NimNode)
+    pragmas[4](NimNode)
+    _[5](NimNode)
+    body[6](NimNode)
+
+  MacroDef:
+    name[0](NimNode)
+    terms[1](NimNode)
+    generics[2](NimNode)
+    params[3](NimNode)
+    pragmas[4](NimNode)
+    _[5](NimNode)
+    body[6](NimNode)
+
+  TypeSection:
+    definitions[0..^1](varargs[NimNode])
+
+  TypeDef:
+    name[0](string | NimNode):
+      result[0] = asIdent(name)
+    generics[1](NimNode)
+    typ[2](NimNode)
+
+  Defer:
+    body[0](NimNode)
+
+  RaiseStmt:
+    node[0](NimNode)
+
+  MixinStmt:
+    node[0](NimNode)
+
+  BindStmt:
+    node[0](NimNode)
+
+  TupleTy:
+    node[0](NimNode)
+
+  VarTy:
+    node[0](NimNode)
+
+  PtrTy:
+    node[0](NimNode)
+
+  RefTy:
+    node[0](NimNode)
+
+  DistinctTy:
+    node[0](NimNode)
+
+  EnumTy:
+    _[0](NimNode)
+    definitions[1..^1](varargs[NimNode])
+
+  TypeClassTy:
+    arglist[0](NimNode)
+    _[1](NimNode)
+    _[2](NimNode)
+    body[3](NimNode)
+
+  ProcTy:
+    name[0](NimNode)
+    _[1](NimNode)
+    generics[2](NimNode)
+    params[3](NimNode)
+    pragmas[4](NimNode)
+    _[5](NimNode)
+    body[6](NimNode)
+
+  IteratorTy:
+    name[0](NimNode)
+    _[1](NimNode)
+    generics[2](NimNode)
+    params[3](NimNode)
+    pragmas[4](NimNode)
+    _[5](NimNode)
+    body[6](NimNode)
+
+  StaticTy:
+    node[0](NimNode)
+
+  ConstTy:
+    node[0](NimNode)
+
+  MutableTy:
+    node[0](NimNode)
+
+  SharedTy:
+    node[0](NimNode)
+
+  StaticStmt:
+    body[0](NimNode)
+
+  UsingStmt:
+    definitions[0..^1](varargs[NimNode])
+
+  TypeOfExpr:
+    node[0](NimNode)
+
+  ObjectTy:
+    pragmas[0](NimNode)
+    inherits[1](NimNode)
+    body[2](NimNode)
+
+  RecList:
+    arguments[0..^1](varargs[NimNode])
+
+  RecCase:
+    cond[0](NimNode)
+    branches[1..^1](varargs[NimNode]):
+      for i, a in branches:
+        assert a.kind in {nnkOfBranch, nnkElifBranch, nnkElseExpr, nnkElse}, "Unable to add non-branch expression to case constructor: " & $a.kind
+        result[1 + i] = a
+
+  RecWhen:
+    branches[0..^1](varargs[NimNode]):
+      for i, a in branches:
+        assert a.kind in {nnkElifBranch, nnkElifExpr, nnkElseExpr, nnkElse}, "Unable to add non-branch expression to when constructor: " & $a.kind
+        result[i] = a
 do:
   Ident(name)
-  RStrLit(name)
-  CommentStmt(name)
+  Sym(name)
+  RStrLit(argument)
+  CommentStmt(argument)
 
 macro test(): untyped =
   let testTableConst = TableConstr(ExprColonExpr(newLit("hello"), newLit(100)))
@@ -488,8 +696,8 @@ macro test(): untyped =
   testTableConst.arguments[0] = newLit(200)
   echo testTableConst.repr
   let testComment = CommentStmt("Hello world")
-  echo testComment.name
-  testComment.name = "test"
+  echo testComment.argument
+  testComment.argument = "test"
   echo testComment.repr
   let testCommand = Command("testCmd", newLit(100))
   echo testCommand.repr
@@ -525,6 +733,29 @@ test()
 #
 #
 #test()
+
+macro testDeclared(): untyped =
+  result = newStmtList()
+  for kind in NimNodeKind:
+    let kindName = newIdentNode($kind)
+    let procName = ($kind)[3..^1]
+    if procName.len >= 3 and procName[^3..^1] == "Lit":
+      result.add quote do:
+        declaredNodes.incl `kindName`
+    else:
+      result.add nnkIfExpr.newTree(nnkElifExpr.newTree(nnkCall.newTree(newIdentNode("declared"), newIdentNode(procName)), quote do:
+        declaredNodes.incl `kindName`
+      ))
+  #echo result.repr
+
+proc check() {.compileTime.} =
+  var declaredNodes: set[NimNodeKind]
+  testDeclared()
+  echo "Declared: ", card(declaredNodes), "/", NimNodeKind.high.int
+  echo {NimNodeKind.low..NimNodeKind.high} - declaredNodes
+
+static:
+  check()
 
 when false:
   proc Command*(name: string | NimNode, arguments: varargs[NimNode]): NimNode =
