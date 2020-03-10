@@ -227,7 +227,7 @@ converter Lit*[T](x: set[T]): NimNode = newLit(`x`)
 
 proc asIdent(name: string | NimNode): NimNode =
   when name is NimNode:
-    assert name.kind == nnkIdent, "Node must be an identifier, but was: " & $name.kind & "(" & name.repr & ")"
+    assert name.kind in {nnkIdent, nnkSym}, "Node must be an identifier or a symbol, but was: " & $name.kind & "(" & name.repr & ")"
     name
   else:
     newIdentNode(name)
@@ -481,7 +481,8 @@ generate:
         result[i] = def
 
   IdentDefs:
-    name[0](NimNode)
+    name[0](string | NimNode):
+      result[0] = asIdent(name)
     typ[1](NimNode)
     body[2](NimNode)
 
@@ -625,6 +626,9 @@ generate:
     _[2](NimNode)
     body[3](NimNode)
 
+  Arglist:
+    arguments[0..^1](varargs[NimNode])
+
   ProcTy:
     name[0](NimNode)
     _[1](NimNode)
@@ -684,11 +688,47 @@ generate:
       for i, a in branches:
         assert a.kind in {nnkElifBranch, nnkElifExpr, nnkElseExpr, nnkElse}, "Unable to add non-branch expression to when constructor: " & $a.kind
         result[i] = a
+
+  EnumFieldDef:
+    left[0](NimNode)
+    right[1](NimNode)
+
+  ObjConstr:
+    name[0](string | NimNode):
+      result[0] = asIdent(name)
+    definitions[1..^1](varargs[NimNode])
 do:
   Ident(name)
   Sym(name)
   RStrLit(argument)
   CommentStmt(argument)
+
+proc forNode*(node: NimNode, kind: NimNodeKind, action: proc (x: NimNode): NimNode): NimNode =
+  if node.kind == kind:
+    return action(node)
+  elif node.kind notin {nnkNone, nnkEmpty, nnkNilLit, nnkCharLit..nnkUInt64Lit, nnkFloatLit..nnkFloat64Lit, nnkStrLit..nnkTripleStrLit}:
+    result = node
+    for i, child in node:
+      result[i] = forNode(child, kind, action)
+  else:
+    result = node
+
+macro superQuote*(x: untyped): untyped =
+  echo x.repr
+  var
+    defs = LetSection()
+    body = x.forNode(nnkAccQuoted, proc(x: NimNode): NimNode =
+      #x.add Ident "test"
+      var str = ""
+      for child in x:
+        str.add $child
+      let sym = genSym()
+      defs.add IdentDefs(sym, Empty(), parseExpr(str))
+      x.del 0, x.len
+      x.add sym
+    )
+  result = StmtList(defs, Call("quote", body))
+  echo result.repr
 
 macro test(): untyped =
   let testTableConst = TableConstr(ExprColonExpr(newLit("hello"), newLit(100)))
@@ -707,6 +747,17 @@ macro test(): untyped =
 
 test()
 
+macro test2(input: untyped): untyped =
+  let x = [newLit(100), newLit(200)]
+  result = superQuote do:
+    echo `$input[0].name`
+    if `x[0]` == 300:
+      echo "test"
+    elif `x[1]` == 200:
+      echo "hello world"
+
+test2:
+  proc someproc()
 #generate:
 #  Command:
 #    name[0](string | NimNode):
@@ -752,7 +803,8 @@ proc check() {.compileTime.} =
   var declaredNodes: set[NimNodeKind]
   testDeclared()
   echo "Declared: ", card(declaredNodes), "/", NimNodeKind.high.int
-  echo {NimNodeKind.low..NimNodeKind.high} - declaredNodes
+  echo "Declared nodes: ", declaredNodes
+  echo "Undeclared nodes: ", {NimNodeKind.low..NimNodeKind.high} - declaredNodes
 
 static:
   check()
