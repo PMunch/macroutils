@@ -1,5 +1,7 @@
 import macros, tables#, algorithm
 
+const AllNodeKinds* = {NimNodeKind.low..NimNodeKind.high}
+
 type
   Slice = object
     offset, length: int
@@ -235,9 +237,8 @@ proc asIdent(name: string | NimNode): NimNode =
 proc Ident*(name: string): NimNode =
   newIdentNode(name)
 
-proc Sym*(name: string): NimNode =
-  result = newNimNode(nnkSym)
-  result.strVal = name
+proc Sym*(name: static[string]): NimNode =
+  bindSym(name)
 
 proc RStrLit*(argument: string): NimNode =
   result = newNimNode(nnkRStrLit)
@@ -703,8 +704,10 @@ do:
   RStrLit(argument)
   CommentStmt(argument)
 
-proc forNode*(node: NimNode, kind: NimNodeKind, action: proc (x: NimNode): NimNode): NimNode =
-  if node.kind == kind:
+proc forNode*(node: NimNode, kind: NimNodeKind or NimNodeKinds, action: proc (x: NimNode): NimNode): NimNode {.discardable.} =
+  ## Takes a NimNode and a NimNodeKind (or a set of NimNodeKind) and applies the procedure passed in as `action` to every node
+  ## that matches the kind throughout the tree. NOTE: This modifies the original node tree and only returns for easy chaining.
+  if (when kind is NimNodeKind: node.kind == kind else: node.kind in kind):
     return action(node)
   elif node.kind notin {nnkNone, nnkEmpty, nnkNilLit, nnkCharLit..nnkUInt64Lit, nnkFloatLit..nnkFloat64Lit, nnkStrLit..nnkTripleStrLit}:
     result = node
@@ -712,6 +715,35 @@ proc forNode*(node: NimNode, kind: NimNodeKind, action: proc (x: NimNode): NimNo
       result[i] = forNode(child, kind, action)
   else:
     result = node
+
+template replaceAll*(node: NimNode, kind: NimNodeKind or NimNodeKinds, replace: NimNode): NimNode =
+  ## Replaces all nodes of `kind` in the tree given by `node` with `replace`
+  forNode(node, kind, proc(x: NimNode): NimNode = replace)
+
+template replaceAll*(node: NimNode, find: NimNode, replace: NimNode): NimNode =
+  ## Replaces all nodes that are equal to `find` in the tree given by `node` with `replace`
+  forNode(node, find.kind, proc(x: NimNode): NimNode = (if find == x: replace else: x))
+
+proc sameTree*(node: NimNode, ignored: NimNodeKind or NimNodeKinds, comp: NimNode): bool =
+  ## Compares two NimNode trees and verifies that the structure and all kinds are the same
+  #echo "Comparing: ", node.treeRepr, " to: ", comp.treeRepr
+  if node.kind notin {nnkNone, nnkEmpty, nnkNilLit, nnkCharLit..nnkUInt64Lit, nnkFloatLit..nnkFloat64Lit, nnkStrLit..nnkTripleStrLit} + (when ignored is NimNodeKind: {ignored} else: ignored):
+    for i, child in node:
+      echo child.kind
+      if (when ignored is NimNodeKind: child.kind == ignored else: child.kind in ignored):
+        continue
+      elif child.kind == comp[i].kind:
+        result = sameTree(child, ignored, comp[i])
+      else:
+        result = false
+  else:
+    if (when ignored is NimNodeKind: node.kind == ignored else: node.kind in ignored):
+      result = true
+    else:
+      result = node.kind == comp.kind
+
+template sameTree*(node: NimNode, comp: NimNode): bool =
+  sameTree(node, {}.NimNodeKinds, comp)
 
 macro superQuote*(x: untyped): untyped =
   echo x.repr
@@ -747,7 +779,37 @@ macro test(): untyped =
 
 test()
 
+import sugar
+
 macro test2(input: untyped): untyped =
+  var test = quote do:
+    echo "Hello world"
+    if something:
+      echo "test"
+  echo "Start"
+  echo test.copyNimTree.replaceAll(nnkStrLit, Lit"Bob")
+           .replaceAll(Sym"echo", Ident"test").repr
+  echo test.copyNimTree.forNode({nnkSym, nnkStrLit}, (x) => Ident"test").repr
+  echo test.copyNimTree.replaceAll({nnkSym, nnkStrLit}, Ident"test").repr
+  echo test.copyNimTree.replaceAll(nnkStrLit, Lit"Bob").sameTree quote do:
+    echo "Bob"
+    if something:
+      echo "Bob"
+  echo test.copyNimTree.replaceAll(nnkStrLit, Lit"Bob").sameTree quote do:
+    echo "Bob"
+  let test2 = quote do:
+      echo "Bob"
+  echo test.sameTree test2
+  let
+    test3 = quote do:
+      echo "Test"
+      block:
+        echo "Test"
+    test4 = newStmtList quote do:
+      echo "test"
+  echo test3.treeRepr
+  echo test4.treeRepr
+  echo test3.sameTree(ignored = nnkBlockStmt, test4)
   let x = [newLit(100), newLit(200)]
   result = superQuote do:
     echo `$input[0].name`
@@ -804,7 +866,7 @@ proc check() {.compileTime.} =
   testDeclared()
   echo "Declared: ", card(declaredNodes), "/", NimNodeKind.high.int
   echo "Declared nodes: ", declaredNodes
-  echo "Undeclared nodes: ", {NimNodeKind.low..NimNodeKind.high} - declaredNodes
+  echo "Undeclared nodes: ", AllNodeKinds - declaredNodes
 
 static:
   check()
