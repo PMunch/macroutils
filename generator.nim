@@ -47,7 +47,8 @@ macro generate(nodes: untyped, extraFields: untyped): untyped =
     var
       positives: seq[BiggestInt]
       negatives: seq[BiggestInt]
-      flexible = (start: -1.BiggestInt, stop: -1.BiggestInt, node: newEmptyNode())
+      flexible =
+        (start: -1.BiggestInt, stop: -1.BiggestInt, node: newEmptyNode())
     for arg in node[1]:
       massert(arg.kind == nnkCall, arg)
       massert(arg[0].kind == nnkBracketExpr, arg[0])
@@ -65,7 +66,8 @@ macro generate(nodes: untyped, extraFields: untyped): untyped =
           for i in arg[0][1][1].intVal..<arg[0][1][2].intVal:
             positives.add i
         of "..^":
-          flexible = (start: arg[0][1][1].intVal, stop: arg[0][1][2].intVal, node: arg)
+          flexible =
+            (start: arg[0][1][1].intVal, stop: arg[0][1][2].intVal, node: arg)
       of nnkPrefix:
         negatives.add arg[0][1][1].intVal
       else:
@@ -83,8 +85,10 @@ macro generate(nodes: untyped, extraFields: untyped): untyped =
       massert(negatives.len - i == v, node)
     massert(negatives.len == 0 or flexible.start != -1, node)
     var generator = nnkProcDef.newTree(
-      nnkPostfix.newTree(newIdentNode("*"), node[0]), newEmptyNode(), newEmptyNode(),
-      nnkFormalParams.newTree(newIdentNode("NimNode")), newEmptyNode(), newEmptyNode(), newStmtList())
+      nnkPostfix.newTree(newIdentNode("*"), node[0]),
+      newEmptyNode(), newEmptyNode(),
+      nnkFormalParams.newTree(newIdentNode("NimNode")),
+      newEmptyNode(), newEmptyNode(), newStmtList())
     for arg in node[1]:
       if arg[0][0].strVal != "_":
         generator[3].add nnkIdentDefs.newTree(arg[0][0], arg[1], newEmptyNode())
@@ -95,7 +99,8 @@ macro generate(nodes: untyped, extraFields: untyped): untyped =
           newLit(positives.len)
         else:
           nnkInfix.newTree(newIdentNode("+"),
-            newLit(positives.len + negatives.len), nnkDotExpr.newTree(flexible.node[0][0], newIdentNode("len")))
+            newLit(positives.len + negatives.len),
+            nnkDotExpr.newTree(flexible.node[0][0], newIdentNode("len")))
     generator[6].add quote do:
       const `isInitialiser` {.used.} = true
       result = newNimNode(`nodeKind`)
@@ -148,18 +153,22 @@ macro generate(nodes: untyped, extraFields: untyped): untyped =
       template `nameNode`*(`x`: NimNode): untyped =
         case `x`.kind:
         else:
-          raise newException(ValueError, "Unable to get " & `field` & " for NimNode of kind " & $`x`.kind)
+          raise newException(ValueError, "Unable to get " & `field` &
+            " for NimNode of kind " & $`x`.kind)
     var setter = quote do:
       template `setterNameNode`*(`x`: NimNode, `val`: untyped): untyped =
         const `isInitialiser` {.used.} = false
         template result(): untyped {.used.} = `x`
         case `x`.kind:
         else:
-          raise newException(ValueError, "Unable to set " & `field` & " for NimNode of kind " & $`x`.kind)
+          raise newException(ValueError, "Unable to set " & `field` &
+            " for NimNode of kind " & $`x`.kind)
     for node in nodes:
       let
-        getterBranch = nnkOfBranch.newTree(newIdentNode("nnk" & node.kind.strVal))
-        setterBranch = nnkOfBranch.newTree(newIdentNode("nnk" & node.kind.strVal))
+        getterBranch =
+          nnkOfBranch.newTree(newIdentNode("nnk" & node.kind.strVal))
+        setterBranch =
+          nnkOfBranch.newTree(newIdentNode("nnk" & node.kind.strVal))
         indices = node.node[0][1]
       case indices.kind:
       of nnkIntLit, nnkPrefix:
@@ -221,7 +230,8 @@ macro createLitConverters(list: varargs[untyped]): untyped =
       converter Lit*(`x`: `kind`): NimNode = newLit(`x`)
 
 createLitConverters(char, int, int8, int16, int32, int64, uint, uint8, uint16,
-                    uint32, uint64, bool, string, float32, float64, enum, object, tuple)
+                    uint32, uint64, bool, string, float32, float64, enum,
+                    object, tuple)
 
 converter Lit*[N, T](x: array[N, T]): NimNode = newLit(`x`)
 converter Lit*[T](x: seq[T]): NimNode = newLit(`x`)
@@ -229,7 +239,9 @@ converter Lit*[T](x: set[T]): NimNode = newLit(`x`)
 
 proc asIdent(name: string | NimNode): NimNode =
   when name is NimNode:
-    assert name.kind in {nnkIdent, nnkSym}, "Node must be an identifier or a symbol, but was: " & $name.kind & "(" & name.repr & ")"
+    assert name.kind in {nnkIdent, nnkSym},
+      "Node must be an identifier or a symbol, but was: " & $name.kind & "(" &
+      name.repr & ")"
     name
   else:
     newIdentNode(name)
@@ -307,7 +319,8 @@ generate:
         of nnkRStrLit: argument
         of nnkStrLit: RStrLit(argument.strVal)
         else:
-          raise newException(ValueError, "Unable to convert NimNode of kind " & $arg.kind & " to nnkRStrLit")
+          raise newException(ValueError,
+            "Unable to convert NimNode of kind " & $arg.kind & " to nnkRStrLit")
       else:
         RStrLit(argument)
 
@@ -341,25 +354,29 @@ generate:
   TableConstr:
     arguments[0..^1](varargs[NimNode]):
       for i, a in arguments:
-        assert a.kind == nnkExprColonExpr, "Unable to add non-colon expression to table constructor: " & $a.kind
+        assert a.kind == nnkExprColonExpr,
+          "Unable to add non-colon expression to table constructor: " & $a.kind
         result[i] = a
 
   IfExpr:
     branches[0..^1](varargs[NimNode]):
       for i, a in branches:
-        assert a.kind in {nnkElifBranch, nnkElifExpr, nnkElseExpr, nnkElse}, "Unable to add non-branch expression to if constructor: " & $a.kind
+        assert a.kind in {nnkElifBranch, nnkElifExpr, nnkElseExpr, nnkElse},
+          "Unable to add non-branch expression to if constructor: " & $a.kind
         result[i] = a
 
   IfStmt:
     branches[0..^1](varargs[NimNode]):
       for i, a in branches:
-        assert a.kind in {nnkElifBranch, nnkElifExpr, nnkElseExpr, nnkElse}, "Unable to add non-branch expression to if constructor: " & $a.kind
+        assert a.kind in {nnkElifBranch, nnkElifExpr, nnkElseExpr, nnkElse},
+          "Unable to add non-branch expression to if constructor: " & $a.kind
         result[i] = a
 
   WhenStmt:
     branches[0..^1](varargs[NimNode]):
       for i, a in branches:
-        assert a.kind in {nnkElifBranch, nnkElifExpr, nnkElseExpr, nnkElse}, "Unable to add non-branch expression to when constructor: " & $a.kind
+        assert a.kind in {nnkElifBranch, nnkElifExpr, nnkElseExpr, nnkElse},
+          "Unable to add non-branch expression to when constructor: " & $a.kind
         result[i] = a
 
   ElifExpr:
@@ -390,7 +407,8 @@ generate:
     cond[0](NimNode)
     branches[1..^1](varargs[NimNode]):
       for i, a in branches:
-        assert a.kind in {nnkOfBranch, nnkElifBranch, nnkElseExpr, nnkElse}, "Unable to add non-branch expression to case constructor: " & $a.kind
+        assert a.kind in {nnkOfBranch, nnkElifBranch, nnkElseExpr, nnkElse},
+          "Unable to add non-branch expression to case constructor: " & $a.kind
         result[1 + i] = a
 
   OfBranch:
@@ -410,7 +428,9 @@ generate:
     body[0](NimNode)
     branches[1..^1](varargs[NimNode]):
       for i, branch in branches:
-        assert branch.kind in {nnkExceptBranch, nnkFinally}, "Unable to add non-except or -finally expression to try constructor: " & $branch.kind
+        assert branch.kind in {nnkExceptBranch, nnkFinally},
+          "Unable to add non-except or -finally expression to try " &
+          "constructor: " & $branch.kind
         result[1 + i] = branch
 
   ExceptBranch:
@@ -466,19 +486,25 @@ generate:
   VarSection:
     definitions[0..^1](varargs[NimNode]):
       for i, def in definitions:
-        assert def.kind == nnkIdentDefs, "Unable to add something not an ident definition to var section constructor: " & $def.kind
+        assert def.kind == nnkIdentDefs,
+          "Unable to add something not an ident definition to var section " &
+          "constructor: " & $def.kind
         result[i] = def
 
   LetSection:
     definitions[0..^1](varargs[NimNode]):
       for i, def in definitions:
-        assert def.kind == nnkIdentDefs, "Unable to add something not an ident definition to let section constructor: " & $def.kind
+        assert def.kind == nnkIdentDefs,
+          "Unable to add something not an ident definition to let section " &
+          "constructor: " & $def.kind
         result[i] = def
 
   ConstSection:
     definitions[0..^1](varargs[NimNode]):
       for i, def in definitions:
-        assert def.kind == nnkConstDef, "Unable to add something not an constant definition to const section constructor: " & $def.kind
+        assert def.kind == nnkConstDef,
+          "Unable to add something not an constant definition to const " &
+          "section constructor: " & $def.kind
         result[i] = def
 
   IdentDefs:
@@ -505,7 +531,9 @@ generate:
   GenericParams:
     definitions[0..^1](varargs[NimNode]):
       for i, def in definitions:
-        assert def.kind == nnkIdentDefs, "Unable to add something not an ident def to generic parameters constructor: " & $def.kind
+        assert def.kind == nnkIdentDefs,
+          "Unable to add something not an ident def to generic parameters " &
+          "constructor: " & $def.kind
         result[i] = def
 
   FormalParams:
@@ -681,13 +709,15 @@ generate:
     cond[0](NimNode)
     branches[1..^1](varargs[NimNode]):
       for i, a in branches:
-        assert a.kind in {nnkOfBranch, nnkElifBranch, nnkElseExpr, nnkElse}, "Unable to add non-branch expression to case constructor: " & $a.kind
+        assert a.kind in {nnkOfBranch, nnkElifBranch, nnkElseExpr, nnkElse},
+          "Unable to add non-branch expression to case constructor: " & $a.kind
         result[1 + i] = a
 
   RecWhen:
     branches[0..^1](varargs[NimNode]):
       for i, a in branches:
-        assert a.kind in {nnkElifBranch, nnkElifExpr, nnkElseExpr, nnkElse}, "Unable to add non-branch expression to when constructor: " & $a.kind
+        assert a.kind in {nnkElifBranch, nnkElifExpr, nnkElseExpr, nnkElse},
+          "Unable to add non-branch expression to when constructor: " & $a.kind
         result[i] = a
 
   EnumFieldDef:
@@ -704,12 +734,26 @@ do:
   RStrLit(argument)
   CommentStmt(argument)
 
-proc forNode*(node: NimNode, kind: NimNodeKind or NimNodeKinds, action: proc (x: NimNode): NimNode, depth, maxDepth: int): NimNode {.discardable.} =
-  ## Takes a NimNode and a NimNodeKind (or a set of NimNodeKind) and applies the procedure passed in as `action` to every node
-  ## that matches the kind throughout the tree. NOTE: This modifies the original node tree and only returns for easy chaining.
-  if (when kind is NimNodeKind: node.kind == kind else: node.kind in kind) and depth <= maxdepth:
+template inOrEquals(node: NimNode,
+                    nodekind: NimNodeKind or NimNodeKinds): untyped =
+  when nodekind is NimNodeKind:
+    node.kind == nodekind
+  else:
+    node.kind in nodekind
+
+proc forNode*(node: NimNode,
+              kind: NimNodeKind or NimNodeKinds,
+              action: proc (x: NimNode): NimNode,
+              depth, maxDepth: int): NimNode {.discardable.} =
+  ## Takes a NimNode and a NimNodeKind (or a set of NimNodeKind) and applies
+  ## the procedure passed in as `action` to every node that matches the kind
+  ## throughout the tree. NOTE: This modifies the original node tree and only
+  ## returns for easy chaining.
+  if node.inOrEquals(kind) and depth <= maxdepth:
     return action(node)
-  elif node.kind notin {nnkNone, nnkEmpty, nnkNilLit, nnkCharLit..nnkUInt64Lit, nnkFloatLit..nnkFloat64Lit, nnkStrLit..nnkTripleStrLit} and
+  elif node.kind notin
+       {nnkNone, nnkEmpty, nnkNilLit, nnkCharLit..nnkUInt64Lit,
+       nnkFloatLit..nnkFloat64Lit, nnkStrLit..nnkTripleStrLit} and
        depth < maxdepth:
     result = node
     for i, child in node:
@@ -717,33 +761,55 @@ proc forNode*(node: NimNode, kind: NimNodeKind or NimNodeKinds, action: proc (x:
   else:
     result = node
 
-template forNode*(node: NimNode, kind: NimNodeKind or NimNodeKinds, maxdepth: int, action: proc (x: NimNode): NimNode): NimNode =
-  ## Takes a NimNode and a NimNodeKind (or a set of NimNodeKind) and applies the procedure passed in as `action` to every node
-  ## that matches the kind throughout the tree. NOTE: This modifies the original node tree and only returns for easy chaining.
-  ## `maxdepth` can be set to stop iterating after a certain depth of nodes.
+template forNode*(node: NimNode,
+                  kind: NimNodeKind or NimNodeKinds,
+                  maxdepth: int,
+                  action: proc (x: NimNode): NimNode): NimNode =
+  ## Takes a NimNode and a NimNodeKind (or a set of NimNodeKind) and applies
+  ## the procedure passed in as `action` to every node that matches the kind
+  ## throughout the tree. NOTE: This modifies the original node tree and only
+  ## returns for easy chaining. `maxdepth` can be set to stop iterating after a
+  ## certain depth of nodes.
   forNode(node, kind, action, 0, maxdepth)
 
-template forNode*(node: NimNode, kind: NimNodeKind or NimNodeKinds, action: proc (x: NimNode): NimNode): NimNode =
-  ## Takes a NimNode and a NimNodeKind (or a set of NimNodeKind) and applies the procedure passed in as `action` to every node
-  ## that matches the kind throughout the tree. NOTE: This modifies the original node tree and only returns for easy chaining.
+template forNode*(node: NimNode,
+                  kind: NimNodeKind or NimNodeKinds,
+                  action: proc (x: NimNode): NimNode): NimNode =
+  ## Takes a NimNode and a NimNodeKind (or a set of NimNodeKind) and applies
+  ## the procedure passed in as `action` to every node that matches the kind
+  ## throughout the tree. NOTE: This modifies the original node tree and only
+  ## returns for easy chaining.
   forNode(node, kind, action, 0, int.high)
 
-template replaceAll*(node: NimNode, kind: NimNodeKind or NimNodeKinds, replace: NimNode, maxdepth = int.high): NimNode =
+template replaceAll*(node: NimNode,
+                     kind: NimNodeKind or NimNodeKinds,
+                     replace: NimNode,
+                     maxdepth = int.high): NimNode =
   ## Replaces all nodes of `kind` in the tree given by `node` with `replace`
   forNode(node, kind, maxdepth, proc(x: NimNode): NimNode = replace)
 
-template replaceAll*(node: NimNode, find: NimNode, replace: NimNode, maxdepth = int.high): NimNode =
-  ## Replaces all nodes that are equal to `find` in the tree given by `node` with `replace`
-  forNode(node, find.kind, maxdepth, proc(x: NimNode): NimNode = (if find == x: replace else: x))
+template replaceAll*(node: NimNode,
+                     find: NimNode,
+                     replace: NimNode,
+                     maxdepth = int.high): NimNode =
+  ## Replaces all nodes that are equal to `find` in the tree given by `node`
+  ## with `replace`
+  forNode(node, find.kind, maxdepth,
+    proc(x: NimNode): NimNode = (if find == x: replace else: x))
 
-proc sameTree*(node: NimNode, ignored: NimNodeKind or NimNodeKinds, comp: NimNode, depth = 0, maxDepth = int.high): bool =
-  ## Compares two NimNode trees and verifies that the structure and all kinds are the same
+proc sameTree*(node: NimNode,
+               ignored: NimNodeKind or NimNodeKinds,
+               comp: NimNode,
+               depth = 0, maxDepth = int.high): bool =
+  ## Compares two NimNode trees and verifies that the structure and all kinds
+  ## are the same.
   #echo "Comparing: ", node.treeRepr, " to: ", comp.treeRepr
-  if (when ignored is NimNodeKind: node.kind == ignored else: node.kind in ignored) or depth >= maxdepth:
+  if node.inOrEquals(ignored) or depth >= maxdepth:
     return true
-  if node.kind notin {nnkNone, nnkEmpty, nnkNilLit, nnkCharLit..nnkUInt64Lit, nnkFloatLit..nnkFloat64Lit, nnkStrLit..nnkTripleStrLit}:
+  if node.kind notin {nnkNone, nnkEmpty, nnkNilLit, nnkCharLit..nnkUInt64Lit,
+                      nnkFloatLit..nnkFloat64Lit, nnkStrLit..nnkTripleStrLit}:
     for i, child in node:
-      if (when ignored is NimNodeKind: child.kind == ignored else: child.kind in ignored):
+      if child.inOrEquals(ignored):
         continue
       elif child.kind == comp[i].kind:
         result = sameTree(child, ignored, comp[i], depth + 1, maxdepth)
@@ -874,11 +940,11 @@ macro test2(input: untyped): untyped =
       echo "test"
     elif `x[1]` == 200:
       echo "hello world"
-  echo red "START"
-  var procname: NimNode
-  input.extract do:
-    proc `procname`()
-  echo red "STOP"
+  #echo red "START"
+  #var procname: NimNode
+  #input.extract do:
+  #  proc `procname`()
+  #echo red "STOP"
 
 test2:
   proc someproc()
