@@ -1,6 +1,10 @@
 import macros, tables#, algorithm
 
-const AllNodeKinds* = {NimNodeKind.low..NimNodeKind.high}
+const
+  AllNodeKinds* = {NimNodeKind.low..NimNodeKind.high}
+  ContainerNodeKinds* = AllNodeKinds - {nnkNone, nnkEmpty, nnkNilLit,
+                        nnkCharLit..nnkUInt64Lit, nnkFloatLit..nnkFloat64Lit,
+                        nnkStrLit..nnkTripleStrLit}
 
 type
   Slice = object
@@ -233,9 +237,9 @@ createLitConverters(char, int, int8, int16, int32, int64, uint, uint8, uint16,
                     uint32, uint64, bool, string, float32, float64, enum,
                     object, tuple)
 
-converter Lit*[N, T](x: array[N, T]): NimNode = newLit(`x`)
-converter Lit*[T](x: seq[T]): NimNode = newLit(`x`)
-converter Lit*[T](x: set[T]): NimNode = newLit(`x`)
+#converter Lit*[N, T](x: array[N, T]): NimNode = newLit(`x`)
+#converter Lit*[T](x: seq[T]): NimNode = newLit(`x`)
+#converter Lit*[T](x: set[T]): NimNode = newLit(`x`)
 
 proc asIdent(name: string | NimNode): NimNode =
   when name is NimNode:
@@ -741,20 +745,62 @@ template inOrEquals(node: NimNode,
   else:
     node.kind in nodekind
 
+proc forNodePos*(node: NimNode,
+              kind: NimNodeKind or NimNodeKinds,
+              action: proc (x, y: NimNode): NimNode,
+              depth, maxDepth: int,
+              expr: NimNode = newEmptyNode()): NimNode {.discardable.} =
+  ## Takes a NimNode and a NimNodeKind (or a set of NimNodeKind) and applies
+  ## the procedure passed in as `action` to every node that matches the kind
+  ## throughout the tree. The `x` passed to `action` is not the node itself, but
+  ## rather it's position in the tree as nested `BrakcketExpr`s. NOTE: This
+  ## modifies the original node tree and only returns for easy chaining.
+  var node =if node.inOrEquals(kind) and depth <= maxdepth:
+      action(node, expr)
+    else:
+      node
+
+  if node.kind in ContainerNodeKinds and depth < maxdepth:
+    result = node
+    for i, child in node:
+      let newexpr = if expr.kind == nnkEmpty:
+        Bracket(Lit i)
+      else:
+        BracketExpr(expr, Lit i)
+      result[i] = forNodePos(child, kind, action, depth + 1, maxdepth, newexpr)
+  else:
+    result = node
+
+template forNodePos*(node: NimNode,
+                  kind: NimNodeKind or NimNodeKinds,
+                  maxdepth: int,
+                  action: proc (x, y: NimNode): NimNode): NimNode =
+  forNodePos(node, kind, action, 0, maxdepth)
+
+template forNodePos*(node: NimNode,
+                  kind: NimNodeKind or NimNodeKinds,
+                  action: proc (x, y: NimNode): NimNode): NimNode =
+  forNodePos(node, kind, action, 0, int.high)
+
 proc forNode*(node: NimNode,
               kind: NimNodeKind or NimNodeKinds,
               action: proc (x: NimNode): NimNode,
               depth, maxDepth: int): NimNode {.discardable.} =
   ## Takes a NimNode and a NimNodeKind (or a set of NimNodeKind) and applies
   ## the procedure passed in as `action` to every node that matches the kind
-  ## throughout the tree. NOTE: This modifies the original node tree and only
-  ## returns for easy chaining.
-  if node.inOrEquals(kind) and depth <= maxdepth:
-    return action(node)
-  elif node.kind notin
-       {nnkNone, nnkEmpty, nnkNilLit, nnkCharLit..nnkUInt64Lit,
-       nnkFloatLit..nnkFloat64Lit, nnkStrLit..nnkTripleStrLit} and
-       depth < maxdepth:
+  ## throughout the tree. The `x` passed to `action` is the node in the tree.
+  ## NOTE: This modifies the original node tree and only returns for easy
+  ## chaining.
+
+  # Check if this node is equals, but continue checking within it if it's a
+  # container
+  var node =
+    if node.inOrEquals(kind) and depth <= maxdepth:
+      action(node)
+    else: node
+
+  # If it's a container, recurse into it, otherwise return it
+  if node.kind in ContainerNodeKinds and depth < maxdepth:
     result = node
     for i, child in node:
       result[i] = forNode(child, kind, action, depth + 1, maxdepth)
@@ -803,16 +849,16 @@ proc sameTree*(node: NimNode,
                depth = 0, maxDepth = int.high): bool =
   ## Compares two NimNode trees and verifies that the structure and all kinds
   ## are the same.
-  #echo "Comparing: ", node.treeRepr, " to: ", comp.treeRepr
+  echo "Comparing: ", node.treeRepr, " to: ", comp.treeRepr
   if node.inOrEquals(ignored) or depth >= maxdepth:
     return true
-  if node.kind notin {nnkNone, nnkEmpty, nnkNilLit, nnkCharLit..nnkUInt64Lit,
-                      nnkFloatLit..nnkFloat64Lit, nnkStrLit..nnkTripleStrLit}:
+  if node.kind in ContainerNodeKinds:
+    result = node.len == comp.len
     for i, child in node:
       if child.inOrEquals(ignored):
         continue
       elif child.kind == comp[i].kind:
-        result = sameTree(child, ignored, comp[i], depth + 1, maxdepth)
+        result = result and sameTree(child, ignored, comp[i], depth + 1, maxdepth)
       else:
         result = false
   else:
@@ -854,36 +900,71 @@ macro superQuote*(x: untyped): untyped =
 
 import sugar, termstyle
 
-#macro extract*(ast: NimNode, pattern: untyped): untyped =
-#  ## A reverse superQuote macro, takes an AST and a pattern with the same tree
-#  ## structure but where nodes can be replaced by quoted statements. The macro
-#  ## will then assign the node in the tree to this statement.
-#  echo red "Hello world"
-#  echo ast.treeRepr
-#  echo pattern.treeRepr
-#  result = quote do:
-#    echo "Hello world"
-
-proc extractImpl(ast: NimNode, pattern: NimNode): NimNode =
-  echo "extractImpl"
-  echo ast.treeRepr
+macro extract*(ast, pattern: untyped): untyped =
+  ## A reverse superQuote macro, takes an AST and a pattern with the same tree
+  ## structure but where nodes can be replaced by quoted statements. The macro
+  ## will then assign the node in the tree to this statement.
+  # TODO: Find way of passing `pattern` to `sameTree`
+  result = StmtList()
+  var x: seq[tuple[node, pos: NimNode]]
+  echo "One"
   echo pattern.treeRepr
-
-macro extractM(ast: untyped, pattern: untyped): untyped =
-  echo "extract"
-  echo ast.treeRepr
+  pattern.forNode(nnkStmtList, proc (x: NimNode): NimNode =
+    if x.len == 1 and x[0].kind == nnkAccQuoted:
+      x[0]
+    else:
+      x
+  )
+  #pattern.forNode(ContainerNodeKinds, proc (x: NimNode): NimNode =
+  #  echo "Checking: ", x.treeRepr
+  #  var quoted: NimNode
+  #  for child in x:
+  #    if child.kind == nnkAccQuoted:
+  #      if quoted.kind == nnkNilLit:
+  #        echo "child.kind is nnkAccQuoted, quoted.kind is ", quoted.kind
+  #        quoted = child
+  #      else:
+  #        quoted.reset
+  #        break
+  #    elif child.kind != nnkEmpty:
+  #      quoted.reset
+  #      break
+  #  if quoted.kind == nnkAccQuoted:
+  #    return quoted
+  #  else:
+  #    return x
+  #  #if x.len == 1 and x[0].kind == nnkAccQuoted:
+  #  #  return x[0]
+  #  #else:
+  #  #  return x
+  #)
+  echo "Two"
   echo pattern.treeRepr
-  discard extractImpl(ast, pattern)
-  result = quote do:
-    echo "This should work"
-
-template extract*(ast, pattern: untyped): untyped =
-  template ptrn() = pattern
-
-  macro testM(): untyped =
-    return extractImpl(ast, getAst(ptrn()))
-
-  testM()
+  pattern.forNodePos(nnkAccQuoted, proc (n, y: NimNode): NimNode =
+    echo n.treeRepr
+    var str = ""
+    for child in n:
+      str.add $child
+    x.add (parseExpr(str), y)
+    newNimNode(nnkNilLit) # Insert None node here so they can be ignored later
+  )
+  echo "Three"
+  echo pattern.treeRepr
+  result = StmtList(quote do:
+    let ptrn = quote do:
+      `pattern`
+    assert ptrn.sameTree(nnkNilLit, `ast`),
+      "Unable to run extract on different trees"
+  )
+  for y in x:
+    let
+      innerAst = ast # This is to work around a VM bug
+      stmt = y.pos.forNode(nnkBracket, (x) => BracketExpr(innerAst, x[0]))
+    if y.node.kind == nnkIdent:
+      result.add newLetStmt(y.node, stmt)
+    else:
+      result.add Asgn(y.node, stmt)
+  echo result.repr
 
 macro test(): untyped =
   let testTableConst = TableConstr(ExprColonExpr(newLit("hello"), newLit(100)))
@@ -900,7 +981,7 @@ macro test(): untyped =
   testCommand.name = "echo"
   echo testCommand.repr
 
-test()
+#test()
 
 macro test2(input: untyped): untyped =
   var test = quote do:
@@ -940,14 +1021,20 @@ macro test2(input: untyped): untyped =
       echo "test"
     elif `x[1]` == 200:
       echo "hello world"
-  #echo red "START"
-  #var procname: NimNode
-  #input.extract do:
-  #  proc `procname`()
-  #echo red "STOP"
 
-test2:
-  proc someproc()
+macro testExtract(input: untyped): untyped =
+  var x = newSeq[NimNode](1)
+  input.extract do:
+    proc `procname`() =
+      `x[0]`
+  assert procname == Ident("someproc")
+  assert x[0] == StmtList(Command(Ident "echo", "Hello world"), Command(Ident "echo", "Hello"))
+  result = Command(Ident "echo", "Everything works!")
+
+testExtract:
+  proc someproc() =
+    echo "Hello world"
+    echo "Hello"
 #generate:
 #  Command:
 #    name[0](string | NimNode):
