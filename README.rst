@@ -4,7 +4,8 @@ This module is meant to supplement the `macros` module in the standard
 library. It adds bits and pieces that I've personally missed while writing
 macros over the years.
 
-## Creating and accessing the fields of NimNodes
+Creating and accessing the fields of NimNodes
+---------------------------------------------
 
 One of the major things is the ability to create and
 access the members of nodes more easily. With this module imported you can
@@ -66,7 +67,9 @@ children that are offset in the node.
 This alone is a useful feature when working with macros. But this module
 also has some more convenience things.
 
-## Traversing the tree
+Traversing the tree
+-------------------
+
 Often times when writing macros you want to manipulate only certain nodes
 within the AST. Either to parse a DSL, or to modify passed in code. For this
 purpose I've implemented various tree traversal procedures here. But before
@@ -96,7 +99,9 @@ either a kind, a set of kinds, or a node along with a node to be inserted
 and replaces every node in the tree that has the same kind, is in the set of
 kinds, or is the same as the node with that node.
 
-## Verifying DSL trees
+Verifying DSL trees
+-------------------
+
 When writing DSLs it's also interesting to check if your tree is the same as
 the structure you wanted. This can be done by a lot of asserts and if and
 for statements. But with this module you can also use the `sameTree`
@@ -120,7 +125,9 @@ wouldn't have to be a call to `echo`, merely a call to any `ident`. If you
 wanted to verify that the two `echo` statements where actually the same you
 could use `forNode` or `forNodePos` to implement that.
 
-## Building trees
+Building trees
+--------------
+
 One of the most welcome additions to the `macros` module has been the
 `quote` macro. It is able to take a tree and interpolate symbols from your
 surrounding code into it. Much like string interpolation works, just for the
@@ -143,7 +150,9 @@ do things like:
   testSuperQuote:
     proc someproc()
 
-## Extracting nodes from a tree
+Extracting nodes from a tree
+----------------------------
+
 Creating trees is all well and good, and with `forNode` and the accessors
 it's easy to get things from the tree. But to take things one step further
 this module also implements what is essentially a reverse `superQuote`
