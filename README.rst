@@ -12,7 +12,8 @@ access the members of nodes more easily. With this module imported you can
 create all of the useful nodes simply by dropping `nnk` from their name. So
 instead of doing something like this:
 
-.. code-block::nim
+.. code-block:: nim
+
   newStmtList(
     nnkCommand.newTree(
       newIdentNode("echo"),
@@ -20,7 +21,8 @@ instead of doing something like this:
 
 You can do something like this:
 
-.. code-block::nim
+.. code-block:: nim
+
   StmtList(
     Command(
       Ident "echo",
@@ -30,7 +32,8 @@ This just removes a lot of noise from creating trees like these. But the
 procedures here are also smarter than the regular `newTree`, and literals
 are automatically converted, so the above can also be written as:
 
-.. code-block::nim
+.. code-block:: nim
+
   StmtList(Command("echo", "Hello world"))
 
 The `Command` procedure here is aware that the first argument is often
@@ -41,7 +44,8 @@ Another neat feature are the setters and getters for the properties of
 nodes. You might have come across code like this (if you haven't, consider
 yourself lucky):
 
-.. code-block::nim
+.. code-block:: nim
+
   procImpls[0][6][2][1][1].add(
     nnkElse.newTree(
       nnkStmtList.newTree(nnkDiscardStmt.newTree(newEmptyNode()))))
@@ -52,7 +56,8 @@ confusing. If you look at the generator procedures we used above you can use
 the same names of the arguments there to access the nodes in those nodes. So
 the above can be written as:
 
-.. code-block::nim
+.. code-block:: nim
+
   procImpls[0].body[2].body[1].branches.add(
     Else(StmtList(DiscardStmt(Empty()))))
 
@@ -86,7 +91,8 @@ that node with the result of applying `action` to it. Note that it goes down
 the tree first, then applies the `action` on the way up. An example that
 replaces all string literals with the word "goodbye" would look like this:
 
-.. code-block::nim
+.. code-block:: nim
+
   ourTree.forNode(nnkStrLit, (x) => Lit"goodbye")
 
 A version of `forNode` named `forNodePos` also exists. It takes an `action`
@@ -111,7 +117,8 @@ depth as well. Combine this with `forNode` and you can pretty much check any
 passed in tree fairly easily. An example of what a `sameTree` check would
 look like:
 
-.. code-block::nim
+.. code-block:: nim
+
   ourTree.sameTree(quote do:
     echo "A string"
     if something:
@@ -137,7 +144,8 @@ allows you to put anything in the quotes, and rewrites it to a normal
 `quote` statement that declares these as let statements. With this you can
 do things like:
 
-.. code-block::nim
+.. code-block:: nim
+
   macro testSuperQuote(input: untyped): untyped =
     let x = [newLit(100), newLit(200)]
     result = superQuote do:
@@ -161,7 +169,8 @@ can also postfix your arguments with `*` to collect them into a sequence of
 nodes. If the identifier exists it will assign or add to it, otherwise it
 will simply create them. With this you can do something like:
 
-.. code-block::nim
+.. code-block:: nim
+
   macro testExtract(input: untyped): untyped =
     var arguments = newSeq[NimNode](1) # Create space for body
     input.extract do:

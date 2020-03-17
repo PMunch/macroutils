@@ -2,14 +2,16 @@
 ## library. It adds bits and pieces that I've personally missed while writing
 ## macros over the years.
 ##
-## ## Creating and accessing the fields of NimNodes
+## Creating and accessing the fields of NimNodes
+## ---------------------------------------------
 ##
 ## One of the major things is the ability to create and
 ## access the members of nodes more easily. With this module imported you can
 ## create all of the useful nodes simply by dropping `nnk` from their name. So
 ## instead of doing something like this:
 ##
-## .. code-block::nim
+## .. code-block:: nim
+##
 ##   newStmtList(
 ##     nnkCommand.newTree(
 ##       newIdentNode("echo"),
@@ -17,7 +19,8 @@
 ##
 ## You can do something like this:
 ##
-## .. code-block::nim
+## .. code-block:: nim
+##
 ##   StmtList(
 ##     Command(
 ##       Ident "echo",
@@ -27,7 +30,8 @@
 ## procedures here are also smarter than the regular `newTree`, and literals
 ## are automatically converted, so the above can also be written as:
 ##
-## .. code-block::nim
+## .. code-block:: nim
+##
 ##   StmtList(Command("echo", "Hello world"))
 ##
 ## The `Command` procedure here is aware that the first argument is often
@@ -38,7 +42,8 @@
 ## nodes. You might have come across code like this (if you haven't, consider
 ## yourself lucky):
 ##
-## .. code-block::nim
+## .. code-block:: nim
+##
 ##   procImpls[0][6][2][1][1].add(
 ##     nnkElse.newTree(
 ##       nnkStmtList.newTree(nnkDiscardStmt.newTree(newEmptyNode()))))
@@ -49,7 +54,8 @@
 ## the same names of the arguments there to access the nodes in those nodes. So
 ## the above can be written as:
 ##
-## .. code-block::nim
+## .. code-block:: nim
+##
 ##   procImpls[0].body[2].body[1].branches.add(
 ##     Else(StmtList(DiscardStmt(Empty()))))
 ##
@@ -64,7 +70,9 @@
 ## This alone is a useful feature when working with macros. But this module
 ## also has some more convenience things.
 ##
-## ## Traversing the tree
+## Traversing the tree
+## -------------------
+##
 ## Often times when writing macros you want to manipulate only certain nodes
 ## within the AST. Either to parse a DSL, or to modify passed in code. For this
 ## purpose I've implemented various tree traversal procedures here. But before
@@ -81,7 +89,8 @@
 ## the tree first, then applies the `action` on the way up. An example that
 ## replaces all string literals with the word "goodbye" would look like this:
 ##
-## .. code-block::nim
+## .. code-block:: nim
+##
 ##   ourTree.forNode(nnkStrLit, (x) => Lit"goodbye")
 ##
 ## A version of `forNode` named `forNodePos` also exists. It takes an `action`
@@ -94,7 +103,9 @@
 ## and replaces every node in the tree that has the same kind, is in the set of
 ## kinds, or is the same as the node with that node.
 ##
-## ## Verifying DSL trees
+## Verifying DSL trees
+## -------------------
+##
 ## When writing DSLs it's also interesting to check if your tree is the same as
 ## the structure you wanted. This can be done by a lot of asserts and if and
 ## for statements. But with this module you can also use the `sameTree`
@@ -104,7 +115,8 @@
 ## passed in tree fairly easily. An example of what a `sameTree` check would
 ## look like:
 ##
-## .. code-block::nim
+## .. code-block:: nim
+##
 ##   ourTree.sameTree(quote do:
 ##     echo "A string"
 ##     if something:
@@ -118,7 +130,9 @@
 ## wanted to verify that the two `echo` statements where actually the same you
 ## could use `forNode` or `forNodePos` to implement that.
 ##
-## ## Building trees
+## Building trees
+## --------------
+##
 ## One of the most welcome additions to the `macros` module has been the
 ## `quote` macro. It is able to take a tree and interpolate symbols from your
 ## surrounding code into it. Much like string interpolation works, just for the
@@ -128,7 +142,8 @@
 ## `quote` statement that declares these as let statements. With this you can
 ## do things like:
 ##
-## .. code-block::nim
+## .. code-block:: nim
+##
 ##   macro testSuperQuote(input: untyped): untyped =
 ##     let x = [newLit(100), newLit(200)]
 ##     result = superQuote do:
@@ -141,7 +156,9 @@
 ##   testSuperQuote:
 ##     proc someproc()
 ##
-## ## Extracting nodes from a tree
+## Extracting nodes from a tree
+## ----------------------------
+##
 ## Creating trees is all well and good, and with `forNode` and the accessors
 ## it's easy to get things from the tree. But to take things one step further
 ## this module also implements what is essentially a reverse `superQuote`
@@ -150,7 +167,8 @@
 ## nodes. If the identifier exists it will assign or add to it, otherwise it
 ## will simply create them. With this you can do something like:
 ##
-## .. code-block::nim
+## .. code-block:: nim
+##
 ##   macro testExtract(input: untyped): untyped =
 ##     var arguments = newSeq[NimNode](1) # Create space for body
 ##     input.extract do:
