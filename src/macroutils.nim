@@ -980,7 +980,7 @@ do:
   RStrLit(argument)
   CommentStmt(argument)
 
-template inOrEquals(node: NimNode,
+template inOrEquals*(node: NimNode,
                     nodekind: NimNodeKind or NimNodeKinds): untyped =
   when nodekind is NimNodeKind:
     node.kind == nodekind
@@ -1139,30 +1139,60 @@ macro extract*(ast, pattern: untyped): untyped =
   ## structure but where nodes can be replaced by quoted statements. The macro
   ## will then assign the node in the tree to this statement. If the statement
   ## ends with `*` it will be a sequence of `NimNode` that gets added to.
+  ##
+  ## If you can't replace a node in the tree with a single quoted statement
+  ## because of Nims syntax, for example to grab all variable assignments in a
+  ## block like this:
+  ##
+  ## .. code-block:: nim
+  ##   var
+  ##     firstVariable = 100
+  ##     secondVariable = "string"
+  ##
+  ## You can instead add quoted statements with a single `*` in them to tell
+  ## `extract` to combine these fields, like so:
+  ##
+  ## .. code-block:: nim
+  ##   macro someMacro(input: untyped): untyped =
+  ##     input.extract:
+  ##       var
+  ##         `fields*` = `*`
+  ##    for field in fields:
+  ##      echo field.treeRepr
+  ##
+  ##   someMacro:
+  ##     var
+  ##       firstVariable = 100
+  ##       secondVariable = "string"
   result = StmtList()
+
+  #echo pattern.treeRepr
 
   # This lifts the AccQuoted up to the highest possible level
   pattern.forNode(ContainerNodeKinds, proc (x: NimNode): NimNode =
     if x.getVarargs.isSome:
       let varargPos = x.getVarargs.get
-      if x.kind == nnkStmtList and x.len == 1 and x[0].kind == nnkAccQuoted and
-        varargPos.start == 0 and varargPos.stop == 1:
+      if x.kind == nnkStmtList and x.len == 1 and x[0].kind == nnkAccQuoted:
         return x[0]
-      else:
-        return x
-    var quoted: NimNode
-    for child in x:
-      if child.kind == nnkAccQuoted:
-        if quoted.kind == nnkNilLit:
-          quoted = child
-        else:
-          quoted.reset
-          break
-      elif child.kind != nnkEmpty:
-        quoted.reset
-        break
-    return if quoted.kind == nnkAccQuoted: quoted else: x
+    else:
+      block checking:
+        var foundNode: NimNode
+        for pos, node in x:
+          if (node.kind == nnkAccQuoted and node.len == 1 and
+            $node[0] == "*") or node.kind == nnkEmpty:
+            continue
+          elif node.kind == nnkAccQuoted:
+            if foundNode.kind != nnkNilLit:
+              break checking
+            foundNode = node
+          else:
+            break checking
+        if foundNode.kind != nnkNilLit:
+          return foundNode
+    return x
   )
+
+  # TODO: Verify that pattern is the same tree structure as input
 
   # This finds and extracts the AccQuoted nodes
   var x: seq[tuple[node: NimNode, pos: seq[int]]]
@@ -1174,6 +1204,8 @@ macro extract*(ast, pattern: untyped): untyped =
     x.add (parseExpr(str), y)
     n
   )
+
+  #echo pattern.treeRepr
   # This performs an important check, but it doesn't work when the AST from
   # above is malformed..
   #result = StmtList(quote do:
@@ -1182,7 +1214,7 @@ macro extract*(ast, pattern: untyped): untyped =
   #  assert ptrn.sameTree(nnkAccQuoted, `ast`),
   #    "Unable to run extract on different trees"
   #)
-  result = StmtList()
+
   for y in x:
     var
       stmt = ast
