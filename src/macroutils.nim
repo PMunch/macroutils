@@ -187,7 +187,7 @@
 ##
 
 
-import macros, tables, options, sugar, sequtils
+import macros, tables, options, sequtils
 
 
 const
@@ -880,7 +880,7 @@ generate:
     node[0](NimNode)
 
   TupleTy:
-    node[0](NimNode)
+    definitions[0..^1](varargs[NimNode])
 
   PtrTy:
     node[0](NimNode)
@@ -1171,7 +1171,6 @@ macro extract*(ast, pattern: untyped): untyped =
   # This lifts the AccQuoted up to the highest possible level
   pattern.forNode(ContainerNodeKinds, proc (x: NimNode): NimNode =
     if x.getVarargs.isSome:
-      let varargPos = x.getVarargs.get
       if x.kind == nnkStmtList and x.len == 1 and x[0].kind == nnkAccQuoted:
         return x[0]
     else:
@@ -1216,6 +1215,9 @@ macro extract*(ast, pattern: untyped): untyped =
   #)
 
   for y in x:
+    # TODO: for each vararg node, check if it has a single child with only
+    # AccQuoted nodes with stars. If it does, check the kind of every child,
+    # and extract fields into separate variables.
     var
       stmt = ast
       parentNode = pattern
