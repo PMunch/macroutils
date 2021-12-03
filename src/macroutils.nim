@@ -995,20 +995,17 @@ proc forNodePos*(node: NimNode,
   ## Takes a NimNode and a NimNodeKind (or a set of NimNodeKind) and applies
   ## the procedure passed in as `action` to every node that matches the kind
   ## throughout the tree. The `x` passed to `action` is not the node itself, but
-  ## rather it's position in the tree as nested `BrakcketExpr` s. NOTE: This
+  ## rather it's position in the tree as a sequence of indexes. NOTE: This
   ## modifies the original node tree and only returns for easy chaining.
-  var node =if node.inOrEquals(kind) and depth <= maxdepth:
+  var node = if node.inOrEquals(kind) and depth <= maxdepth:
       action(node, expr)
     else:
       node
 
+  result = node
   if node.kind in ContainerNodeKinds and depth < maxdepth:
-    result = node
     for i, child in node:
-      let newexpr = expr.concat @[i]
-      result[i] = forNodePos(child, kind, action, depth + 1, maxdepth, newexpr)
-  else:
-    result = node
+      result[i] = forNodePos(child, kind, action, depth + 1, maxdepth, expr & i)
 
 template forNodePos*(node: NimNode,
                   kind: NimNodeKind or NimNodeKinds,
@@ -1029,8 +1026,8 @@ proc forNodePos*(node: NimNode,
   ## Takes a NimNode and a NimNodeKind (or a set of NimNodeKind) and applies
   ## the procedure passed in as `action` to every node that matches the kind
   ## throughout the tree. The `x` passed to `action` is not the node itself, but
-  ## rather it's position in the tree as nested `BrakcketExpr` s. NOTE: This
-  ## does not modify the original node tree and returns for easy chaining.
+  ## rather it's position in the tree as a sequence of indexes. This version
+  ## does not mutate the underlying node.
   if node.inOrEquals(kind) and depth <= maxdepth:
     action(node, expr)
 
@@ -1049,12 +1046,10 @@ proc forNode*(node: NimNode,
   ## chaining.
 
   # If it's a container, recurse into it, otherwise return it
+  result = node
   if node.kind in ContainerNodeKinds and depth < maxdepth:
-    result = node
     for i, child in node:
       result[i] = forNode(child, kind, action, depth + 1, maxdepth)
-  else:
-    result = node
 
   # Check if this node is equals, but continue checking within it if it's a
   # container
