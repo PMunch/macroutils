@@ -1021,6 +1021,23 @@ template forNodePos*(node: NimNode,
                   action: proc (x: NimNode, y: seq[int]): NimNode): NimNode =
   forNodePos(node, kind, action, 0, int.high)
 
+proc forNodePos*(node: NimNode,
+              kind: NimNodeKind or NimNodeKinds,
+              action: proc (x: NimNode, y: seq[int]),
+              depth = 0, maxDepth = int.high,
+              expr: seq[int] = @[]) =
+  ## Takes a NimNode and a NimNodeKind (or a set of NimNodeKind) and applies
+  ## the procedure passed in as `action` to every node that matches the kind
+  ## throughout the tree. The `x` passed to `action` is not the node itself, but
+  ## rather it's position in the tree as nested `BrakcketExpr` s. NOTE: This
+  ## does not modify the original node tree and returns for easy chaining.
+  if node.inOrEquals(kind) and depth <= maxdepth:
+    action(node, expr)
+
+  if node.kind in ContainerNodeKinds and depth < maxdepth:
+    for i, child in node:
+      forNodePos(child, kind, action, depth + 1, maxdepth, expr & i)
+
 proc forNode*(node: NimNode,
               kind: NimNodeKind or NimNodeKinds,
               action: proc (x: NimNode): NimNode,
@@ -1056,6 +1073,26 @@ template forNode*(node: NimNode,
                   kind: NimNodeKind or NimNodeKinds,
                   action: proc (x: NimNode): NimNode): NimNode =
   forNode(node, kind, action, 0, int.high)
+
+proc forNode*(node: NimNode,
+              kind: NimNodeKind or NimNodeKinds,
+              action: proc (x: NimNode),
+              depth = 0, maxDepth = int.high) =
+  ## Takes a NimNode and a NimNodeKind (or a set of NimNodeKind) and applies
+  ## the procedure passed in as `action` to every node that matches the kind
+  ## throughout the tree. The `x` passed to `action` is the node in the tree.
+  ## NOTE: This does not modify the original node tree and returns for easy
+  ## chaining.
+
+  # If it's a container, recurse into it, otherwise return it
+  if node.kind in ContainerNodeKinds and depth < maxdepth:
+    for i, child in node:
+      forNode(child, kind, action, depth + 1, maxdepth)
+
+  # Check if this node is equals, but continue checking within it if it's a
+  # container
+  if node.inOrEquals(kind) and depth <= maxdepth:
+    action(node)
 
 template replaceAll*(node: NimNode,
                      kind: NimNodeKind or NimNodeKinds,
